@@ -359,6 +359,34 @@ a {
   overflow: visible;
 }
 
+@property --cursor-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 45deg;
+}
+
+.hero-start-glow:not(:hover):not(.sweep-active) {
+  animation: hero-start-glow-orbit 5.8s linear infinite;
+}
+
+.hero-start-glow:not(:hover):not(.sweep-active)::before {
+  opacity: 0.34;
+}
+
+.hero-start-glow:not(:hover):not(.sweep-active)::after {
+  opacity: 0.11;
+}
+
+.hero-start-glow:not(:hover):not(.sweep-active) > .edge-light {
+  opacity: 0.42;
+}
+
+.hero-start-glow .border-glow-inner {
+  border-radius: inherit;
+  box-shadow: 0 0 34px rgba(56, 189, 248, 0.08);
+  animation: hero-start-soft-pulse 2.8s ease-in-out infinite;
+}
+
 @property --demo-x {
   syntax: "<percentage>";
   inherits: true;
@@ -408,6 +436,27 @@ a {
       24px 36px,
       36px 12px,
       12px 24px;
+  }
+}
+
+@keyframes hero-start-glow-orbit {
+  from {
+    --cursor-angle: 0deg;
+  }
+  to {
+    --cursor-angle: 360deg;
+  }
+}
+
+@keyframes hero-start-soft-pulse {
+  0%,
+  100% {
+    filter: saturate(1);
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.07);
+  }
+  50% {
+    filter: saturate(1.14);
+    box-shadow: 0 0 46px rgba(192, 132, 252, 0.13);
   }
 }
 

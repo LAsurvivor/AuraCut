@@ -1,33 +1,42 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Download, Eye, Link2, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
 type ToastKind = "copied" | "downloaded" | "deleted" | null;
+type PresetImage = {
+  name: string;
+  processedUrl?: string;
+  url: string;
+};
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
 const MAX_UPLOAD_MB = 10;
-const PRESET_IMAGES = [
+const PRESET_IMAGES: PresetImage[] = [
+  {
+    name: "Cavapoo",
+    processedUrl: "/images/presets/cavapoo-after-flipped.png",
+    url: "/images/presets/cavapoo-before.avif"
+  },
   {
     name: "Portrait",
-    url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&h=900&q=84"
+    processedUrl: "/images/presets/boy-after-flipped.png",
+    url: "/images/presets/boy-before.avif"
   },
   {
-    name: "Watch",
-    url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&h=900&q=84"
+    name: "Ferrari",
+    processedUrl: "/images/presets/ferrari-after-flipped.png",
+    url: "/images/presets/ferrari-before.jpg"
   },
   {
-    name: "Pet",
-    url: "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=900&h=900&q=84"
-  },
-  {
-    name: "Plant",
-    url: "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&h=900&q=84"
+    name: "Earrings",
+    processedUrl: "/images/presets/earrings-after-flipped.png",
+    url: "/images/presets/earrings-before.jpeg"
   }
 ];
 
@@ -333,13 +342,15 @@ export function TransformationCard() {
     });
   }
 
-  async function simulateProcessing(nextPreviewUrl: string): Promise<void> {
+  async function simulateProcessing(nextPreviewUrl: string, presetProcessedUrl?: string): Promise<void> {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     setState("processing");
     centerCanvasInViewport();
-    const processedPromise = createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
+    const processedPromise = presetProcessedUrl
+      ? Promise.resolve(presetProcessedUrl)
+      : createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
     const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
     const nextShareUrl = `https://auracut.app/i/${crypto.randomUUID().slice(0, 8)}.png`;
 
@@ -420,10 +431,10 @@ export function TransformationCard() {
     clearWorkspace();
   }
 
-  async function startPreset(url: string): Promise<void> {
+  async function startPreset(preset: PresetImage): Promise<void> {
     revokeIfDisposable(previewUrl);
 
-    setPreviewUrl(url);
+    setPreviewUrl(preset.url);
     setResultUrl(null);
     setShareUrl(null);
     setError(null);
@@ -431,7 +442,7 @@ export function TransformationCard() {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
-    await simulateProcessing(url);
+    await simulateProcessing(preset.url, preset.processedUrl);
   }
 
   return (
@@ -446,15 +457,14 @@ export function TransformationCard() {
       <div className="tool-stage">
         <label
           ref={canvasRef}
-          className={`cinema-panel tool-canvas relative flex origin-bottom cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-            isDragging
-              ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
+          className={`cinema-panel tool-canvas relative flex origin-bottom cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${isDragging
+            ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
             : state === "processing"
-                ? "tool-canvas-expanded border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
-            : state === "idle"
+              ? "tool-canvas-expanded border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
+              : state === "idle"
                 ? "border-dashed border-white/14 bg-white/[0.035] hover:border-cyan-200/34 hover:bg-white/[0.055] hover:shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_26px_100px_rgba(59,130,246,0.16)]"
                 : "tool-canvas-expanded border-white/12 bg-slate-950/78"
-          }`}
+            }`}
           onDragEnter={(event) => {
             event.preventDefault();
             setIsDragging(true);
@@ -479,32 +489,31 @@ export function TransformationCard() {
             }}
           />
 
-        {state === "idle" ? (
-          <div className="relative flex flex-col items-center px-6 text-center">
-            <motion.span
-              className="absolute -inset-x-24 -inset-y-28 bg-[linear-gradient(115deg,transparent_18%,rgba(34,211,238,0.11)_38%,rgba(168,85,247,0.10)_58%,transparent_78%)] blur-2xl"
-              animate={{ x: ["-8%", "8%", "-4%"], opacity: [0.34, 0.72, 0.42] }}
-              transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
-            />
-            <motion.span
-              className="relative inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-100/18 bg-cyan-100 px-6 text-sm font-semibold text-slate-950 shadow-[0_0_44px_rgba(103,232,249,0.22)] transition hover:bg-white"
-              animate={isDragging ? { y: [0, -5, 0], scale: [1, 1.03, 1] } : { y: 0, scale: 1 }}
-              transition={{ duration: 1.2, repeat: isDragging ? Infinity : 0, ease: "easeInOut" }}
-            >
-              <Upload className="h-4 w-4" aria-hidden="true" />
-              Upload Image
-            </motion.span>
-            <p className="relative mt-4 text-sm text-white/44">or drop an image here.</p>
-          </div>
-        ) : null}
+          {state === "idle" ? (
+            <div className="relative flex flex-col items-center px-6 text-center">
+              <motion.span
+                className="absolute -inset-x-24 -inset-y-28 bg-[linear-gradient(115deg,transparent_18%,rgba(34,211,238,0.11)_38%,rgba(168,85,247,0.10)_58%,transparent_78%)] blur-2xl"
+                animate={{ x: ["-8%", "8%", "-4%"], opacity: [0.34, 0.72, 0.42] }}
+                transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.span
+                className="relative inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-100/18 bg-cyan-100 px-6 text-sm font-semibold text-slate-950 shadow-[0_0_44px_rgba(103,232,249,0.22)] transition hover:bg-white"
+                animate={isDragging ? { y: [0, -5, 0], scale: [1, 1.03, 1] } : { y: 0, scale: 1 }}
+                transition={{ duration: 1.2, repeat: isDragging ? Infinity : 0, ease: "easeInOut" }}
+              >
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                Upload Image
+              </motion.span>
+              <p className="relative mt-4 text-sm text-white/44">or drop an image here</p>
+            </div>
+          ) : null}
 
           {previewUrl && state === "result" ? (
             <img
               src={previewUrl}
               alt="Uploaded image"
-              className={`image-contain absolute inset-0 transition duration-300 ${
-                state === "result" && resultUrl && !showOriginal ? "opacity-0" : "opacity-100"
-              }`}
+              className={`image-contain absolute inset-0 transition duration-300 ${state === "result" && resultUrl && !showOriginal ? "opacity-0" : "opacity-100"
+                }`}
             />
           ) : null}
 
@@ -543,8 +552,9 @@ export function TransformationCard() {
 
           {state === "error" ? (
             <div className="flex max-w-md flex-col items-center px-6 text-center">
-              <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-lg border border-rose-200/18 bg-rose-400/10 text-rose-200">
-                <X className="h-7 w-7" aria-hidden="true" />
+              <span className="relative mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-cyan-100/16 bg-white/[0.045] text-cyan-100 shadow-[0_0_48px_rgba(34,211,238,0.16),inset_0_0_28px_rgba(34,211,238,0.08)]">
+                <span className="absolute inset-2 rounded-full bg-cyan-100/10 blur-md" />
+                <AlertTriangle className="relative h-6 w-6" aria-hidden="true" />
               </span>
               <h3 className="text-xl font-semibold text-white">Could not transform</h3>
               <p className="mt-2 text-sm leading-6 text-white/52">{error}</p>
@@ -553,13 +563,12 @@ export function TransformationCard() {
         </label>
 
         <div
-          className={`preset-tray flex flex-col items-center gap-3 text-center ${
-            state === "idle" ? "opacity-100" : "preset-tray-hidden"
-          }`}
+          className={`preset-tray flex flex-col items-center gap-3 text-center ${state === "idle" ? "opacity-100" : "preset-tray-hidden"
+            }`}
           aria-hidden={state !== "idle"}
         >
           <p className="text-sm text-white/42">
-            No Image? <span className="text-white/68">Try one of these.</span>
+            No Image? <span className="text-white/68">Try one of these:</span>
           </p>
           <div className="grid grid-cols-4 gap-3">
             {PRESET_IMAGES.map((preset) => (
@@ -567,7 +576,7 @@ export function TransformationCard() {
                 key={preset.name}
                 type="button"
                 disabled={state !== "idle"}
-                onClick={() => void startPreset(preset.url)}
+                onClick={() => void startPreset(preset)}
                 className="group h-16 w-16 rounded-[1.15rem] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-100/70"
                 title={preset.name}
                 aria-label={`Try ${preset.name}`}
@@ -684,6 +693,21 @@ export function TransformationCard() {
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
             </button>
           </motion.div>
+        ) : null}
+
+        {state === "error" ? (
+          <motion.button
+            type="button"
+            onClick={startAgain}
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-cyan-100/18 bg-cyan-100 px-5 text-sm font-semibold text-slate-950 shadow-[0_18px_70px_rgba(34,211,238,0.22)] transition hover:bg-white"
+            initial={{ opacity: 0, y: 10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+            aria-label="Try again"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Again
+          </motion.button>
         ) : null}
       </div>
 
