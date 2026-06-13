@@ -150,6 +150,8 @@ export function Aurora(props: AuroraProps) {
       }
     }
 
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(ctn);
     window.addEventListener("resize", resize);
 
     const geometry = new Triangle(gl);
@@ -200,6 +202,7 @@ export function Aurora(props: AuroraProps) {
 
     return () => {
       cancelAnimationFrame(animateId);
+      resizeObserver.disconnect();
       window.removeEventListener("resize", resize);
       if (ctn && gl.canvas.parentNode === ctn) {
         ctn.removeChild(gl.canvas);

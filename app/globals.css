@@ -38,6 +38,21 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+.access-lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+body.access-gate-active {
+  overflow: hidden;
+}
+
+.access-protected-content-locked {
+  pointer-events: none;
+  user-select: none;
+}
+
 body::before {
   position: absolute;
   top: 0;

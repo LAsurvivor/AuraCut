@@ -3,6 +3,7 @@ const basePath = process.env.GITHUB_ACTIONS === "true" ? `/${repoName}` : "";
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ["127.0.0.1"],
   assetPrefix: basePath || undefined,
   basePath,
   env: {
