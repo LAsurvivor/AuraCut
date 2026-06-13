@@ -1,19 +1,37 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Download, Eye, Link2, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { Check, Download, Eye, Link2, RefreshCw, Upload, X } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "uploaded" | "processing" | "result" | "error";
-type ToastKind = "copied" | "downloaded" | "deleted" | null;
+type ToastKind = "copied" | "downloaded" | null;
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
 const MAX_UPLOAD_MB = 10;
 const MOCK_IMAGE =
   "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=1200&q=88";
+const PRESET_IMAGES = [
+  {
+    name: "Portrait",
+    url: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=900&q=84"
+  },
+  {
+    name: "Product",
+    url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=84"
+  },
+  {
+    name: "Studio",
+    url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=84"
+  },
+  {
+    name: "Object",
+    url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=84"
+  }
+];
 
 function revokeBlobUrl(url: string | null): void {
   if (url?.startsWith("blob:")) {
@@ -279,71 +297,78 @@ export function TransformationCard() {
     setState("result");
   }
 
+  async function startPreset(url: string): Promise<void> {
+    revokeBlobUrl(previewUrl);
+
+    if (resultUrl !== previewUrl) {
+      revokeBlobUrl(resultUrl);
+    }
+
+    setPreviewUrl(url);
+    setResultUrl(null);
+    setError(null);
+    setShowOriginal(false);
+    await simulateProcessing(url);
+  }
+
   return (
     <motion.section
       id="studio"
-      className="mx-auto w-full max-w-6xl px-4 pb-24 sm:px-6 lg:px-8"
+      className="mx-auto w-full max-w-4xl px-4 pb-24 sm:px-6 lg:px-8"
       initial={{ opacity: 0, y: 28 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.55, ease: "easeOut" }}
     >
-      <div className="cinema-panel overflow-hidden rounded-lg p-2 sm:p-3">
-        <label
-          className={`relative flex min-h-[430px] cursor-pointer items-center justify-center overflow-hidden rounded-lg border transition duration-500 sm:min-h-[620px] ${
-            isDragging
-              ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
-              : state === "processing"
-                ? "border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
-              : state === "idle"
-                ? "border-dashed border-white/14 bg-white/[0.035] shadow-[inset_0_0_80px_rgba(34,211,238,0.045)] hover:border-cyan-200/34 hover:bg-white/[0.055] hover:shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_26px_100px_rgba(59,130,246,0.16)]"
-                : "border-white/12 bg-slate-950/78"
-          }`}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            setIsDragging(true);
+      <label
+        className={`cinema-panel relative flex min-h-[300px] cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition duration-500 sm:min-h-[430px] ${
+          isDragging
+            ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
+            : state === "processing"
+              ? "border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
+            : state === "idle"
+              ? "border-dashed border-white/14 bg-white/[0.035] hover:border-cyan-200/34 hover:bg-white/[0.055] hover:shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_26px_100px_rgba(59,130,246,0.16)]"
+              : "border-white/12 bg-slate-950/78"
+        }`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_INPUT}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) {
+              void handleFile(file);
+            }
           }}
-          onDragOver={(event) => event.preventDefault()}
-          onDragLeave={() => setIsDragging(false)}
-          onDrop={handleDrop}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ACCEPTED_INPUT}
-            className="sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) {
-                void handleFile(file);
-              }
-            }}
-          />
+        />
 
-          {state === "idle" ? (
-            <div className="relative flex flex-col items-center px-6 text-center">
-              <motion.span
-                className="absolute -inset-x-24 -inset-y-28 bg-[linear-gradient(115deg,transparent_18%,rgba(34,211,238,0.11)_38%,rgba(168,85,247,0.10)_58%,transparent_78%)] blur-2xl"
-                animate={{ x: ["-8%", "8%", "-4%"], opacity: [0.34, 0.72, 0.42] }}
-                transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
-              />
-              <motion.span
-                className="relative mb-6 flex h-20 w-20 items-center justify-center rounded-lg border border-white/12 bg-white/[0.07] text-cyan-100 shadow-[0_0_48px_rgba(34,211,238,0.18)] backdrop-blur-xl"
-                animate={isDragging ? { y: [0, -8, 0], scale: [1, 1.04, 1] } : { y: [0, -4, 0], scale: 1 }}
-                transition={{ duration: 1.2, repeat: isDragging ? Infinity : 0, ease: "easeInOut" }}
-              >
-                <Upload className="h-8 w-8" aria-hidden="true" />
-              </motion.span>
-              <h3 className="relative text-2xl font-semibold text-white">Drop image</h3>
-              <div className="relative mt-5 flex gap-2">
-                {["PNG", "JPG", "WEBP"].map((type) => (
-                  <span key={type} className="rounded-full border border-white/10 bg-white/[0.055] px-2.5 py-1 text-[11px] font-semibold text-white/48 backdrop-blur">
-                    {type}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ) : null}
+        {state === "idle" ? (
+          <div className="relative flex flex-col items-center px-6 text-center">
+            <motion.span
+              className="absolute -inset-x-24 -inset-y-28 bg-[linear-gradient(115deg,transparent_18%,rgba(34,211,238,0.11)_38%,rgba(168,85,247,0.10)_58%,transparent_78%)] blur-2xl"
+              animate={{ x: ["-8%", "8%", "-4%"], opacity: [0.34, 0.72, 0.42] }}
+              transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.span
+              className="relative inline-flex min-h-12 items-center gap-2 rounded-full border border-cyan-100/18 bg-cyan-100 px-6 text-sm font-semibold text-slate-950 shadow-[0_0_44px_rgba(103,232,249,0.22)] transition hover:bg-white"
+              animate={isDragging ? { y: [0, -5, 0], scale: [1, 1.03, 1] } : { y: 0, scale: 1 }}
+              transition={{ duration: 1.2, repeat: isDragging ? Infinity : 0, ease: "easeInOut" }}
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              Upload Image
+            </motion.span>
+            <p className="relative mt-4 text-sm text-white/44">or upload from URL</p>
+          </div>
+        ) : null}
 
           {previewUrl && state !== "idle" ? (
             <img
@@ -408,109 +433,113 @@ export function TransformationCard() {
               <p className="mt-2 text-sm leading-6 text-white/52">{error}</p>
             </div>
           ) : null}
-        </label>
+      </label>
 
-        {resultUrl ? (
-          <motion.div
-            className="mt-3 flex flex-col justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.045] p-3 shadow-[0_18px_70px_rgba(2,6,23,0.22)] backdrop-blur-xl sm:flex-row sm:items-center"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <div className="min-w-0">
-              <p className="truncate rounded-full border border-white/10 bg-slate-950/48 px-3 py-2 text-xs font-medium text-cyan-100/86">{shareUrl}</p>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
+      {state === "idle" ? (
+        <div className="mt-5 flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-white/42">
+            No image? <span className="text-white/68">Try one.</span>
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {PRESET_IMAGES.map((preset) => (
               <button
+                key={preset.name}
                 type="button"
-                onPointerDown={(event) => {
-                  event.preventDefault();
+                onClick={() => void startPreset(preset.url)}
+                className="group h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] p-1 transition hover:-translate-y-0.5 hover:border-cyan-100/32 hover:bg-white/[0.08]"
+                title={preset.name}
+                aria-label={`Try ${preset.name}`}
+              >
+                <img src={preset.url} alt="" className="h-full w-full rounded-[0.85rem] object-contain" />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {resultUrl ? (
+        <motion.div
+          className="mt-4 flex justify-center"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
+        >
+          <div className="flex flex-wrap justify-center gap-2 rounded-full border border-white/10 bg-white/[0.045] p-2 shadow-[0_18px_70px_rgba(2,6,23,0.22)] backdrop-blur-xl">
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setShowOriginal(true);
+              }}
+              onPointerUp={(event) => {
+                event.preventDefault();
+                setShowOriginal(false);
+              }}
+              onPointerCancel={() => setShowOriginal(false)}
+              onPointerLeave={() => setShowOriginal(false)}
+              onKeyDown={(event) => {
+                if (event.key === " " || event.key === "Enter") {
                   setShowOriginal(true);
-                }}
-                onPointerUp={(event) => {
-                  event.preventDefault();
-                  setShowOriginal(false);
-                }}
-                onPointerCancel={() => setShowOriginal(false)}
-                onPointerLeave={() => setShowOriginal(false)}
-                onKeyDown={(event) => {
-                  if (event.key === " " || event.key === "Enter") {
-                    setShowOriginal(true);
-                  }
-                }}
-                onKeyUp={() => setShowOriginal(false)}
-                onBlur={() => setShowOriginal(false)}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
-                title="Hold to compare"
-                aria-label="Hold to compare"
-              >
-                <Eye className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Compare</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void copyUrl()}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
-                title="Copy URL"
-                aria-label="Copy URL"
-              >
-                <Link2 className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
-              </button>
-              <a
-                href={resultUrl}
-                download
-                onClick={() => showToast("downloaded")}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-cyan-100 text-slate-950 shadow-[0_0_34px_rgba(103,232,249,0.24)] transition hover:-translate-y-0.5 hover:bg-white"
-                title="Download"
-                aria-label="Download"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Save</span>
-              </a>
+                }
+              }}
+              onKeyUp={() => setShowOriginal(false)}
+              onBlur={() => setShowOriginal(false)}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
+              title="Hold to compare"
+              aria-label="Hold to compare"
+            >
+              <Eye className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Compare</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyUrl()}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
+              title="Copy URL"
+              aria-label="Copy URL"
+            >
+              <Link2 className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
+            </button>
+            <a
+              href={resultUrl}
+              download
+              onClick={() => showToast("downloaded")}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-cyan-100 text-slate-950 shadow-[0_0_34px_rgba(103,232,249,0.24)] transition hover:-translate-y-0.5 hover:bg-white"
+              title="Download"
+              aria-label="Download"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Save</span>
+            </a>
             <button
               type="button"
               onClick={reset}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
-                title="Re-upload"
-                aria-label="Re-upload"
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
+              title="Re-upload"
+              aria-label="Re-upload"
             >
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                reset();
-                showToast("deleted");
-              }}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-rose-200/30 hover:bg-rose-300/10 hover:text-white"
-              title="Delete"
-              aria-label="Delete"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
             </button>
           </div>
-          </motion.div>
-        ) : null}
+        </motion.div>
+      ) : null}
 
-        <details className="mx-auto mt-3 w-fit text-xs text-white/34">
-          <summary className="cursor-pointer rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 transition hover:text-white/64">dev</summary>
-          <div className="mt-2 flex flex-wrap justify-center gap-2">
-            <button type="button" onClick={() => void startMockUploaded()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-              uploaded
-            </button>
-            <button type="button" onClick={() => void startMockProcessing()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-              processing
-            </button>
-            <button type="button" onClick={() => void startMockResult()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-              result
-            </button>
-          </div>
-        </details>
-      </div>
+      <details className="mx-auto mt-4 w-fit text-xs text-white/28">
+        <summary className="cursor-pointer rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 transition hover:text-white/58">dev</summary>
+        <div className="mt-2 flex flex-wrap justify-center gap-2">
+          <button type="button" onClick={() => void startMockUploaded()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
+            uploaded
+          </button>
+          <button type="button" onClick={() => void startMockProcessing()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
+            processing
+          </button>
+          <button type="button" onClick={() => void startMockResult()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
+            result
+          </button>
+        </div>
+      </details>
 
       {toast ? (
         <motion.div
@@ -520,7 +549,7 @@ export function TransformationCard() {
           exit={{ opacity: 0, y: 12, x: "-50%" }}
         >
           <Check className="h-4 w-4 text-cyan-100" aria-hidden="true" />
-          {toast === "copied" ? "URL copied" : toast === "downloaded" ? "Download started" : "Deleted"}
+          {toast === "copied" ? "URL copied" : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>

@@ -169,6 +169,46 @@ a {
   animation: star-twinkle 2.8s ease-in-out infinite;
 }
 
+.aurora-button {
+  position: relative;
+  background:
+    linear-gradient(90deg, rgba(103, 232, 249, 0.72), rgba(167, 139, 250, 0.72), rgba(255, 255, 255, 0.32), rgba(103, 232, 249, 0.72));
+  background-size: 220% 100%;
+  box-shadow:
+    0 0 42px rgba(34, 211, 238, 0.13),
+    0 18px 60px rgba(0, 0, 0, 0.28);
+  animation: aurora-border 5.2s ease-in-out infinite;
+}
+
+.aurora-button::before {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  content: "";
+  background: inherit;
+  filter: blur(16px);
+  opacity: 0.28;
+}
+
+.hero-demo::before {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(115deg, transparent 18%, rgba(103, 232, 249, 0.12), transparent 52%);
+  animation: demo-sheen 4.8s ease-in-out infinite alternate;
+}
+
+.hero-demo-before {
+  animation: demo-wipe 4.8s ease-in-out infinite alternate;
+}
+
+.hero-demo-line {
+  animation: demo-line 4.8s ease-in-out infinite alternate;
+}
+
 @keyframes gradient-shift {
   from {
     background-position:
@@ -216,5 +256,48 @@ a {
   50% {
     opacity: 1;
     transform: translateX(8px) scale(1);
+  }
+}
+
+@keyframes aurora-border {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes demo-wipe {
+  0%,
+  16% {
+    clip-path: inset(0 0 0 0);
+  }
+  84%,
+  100% {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+
+@keyframes demo-line {
+  0%,
+  16% {
+    left: calc(100% - 1.25rem);
+  }
+  84%,
+  100% {
+    left: 1.25rem;
+  }
+}
+
+@keyframes demo-sheen {
+  from {
+    transform: translateX(-28%);
+    opacity: 0.32;
+  }
+  to {
+    transform: translateX(28%);
+    opacity: 0.58;
   }
 }
