@@ -524,14 +524,14 @@ export function TransformationCard() {
         </div>
       </div>
 
-      {resultUrl ? (
-        <motion.div
-          className="mt-4 flex flex-col items-center gap-3"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: "easeOut" }}
-        >
-          <div className="flex flex-wrap justify-center gap-2 rounded-full border border-white/10 bg-white/[0.045] p-2 shadow-[0_18px_70px_rgba(2,6,23,0.22)] backdrop-blur-xl">
+      <div className="mt-4 flex h-14 flex-col items-center gap-3">
+        {resultUrl ? (
+          <motion.div
+            className="flex flex-wrap justify-center gap-2 rounded-full border border-white/10 bg-white/[0.045] p-2 shadow-[0_18px_70px_rgba(2,6,23,0.22)] backdrop-blur-xl"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+          >
             <button
               type="button"
               onPointerDown={(event) => {
@@ -599,9 +599,9 @@ export function TransformationCard() {
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
             </button>
-          </div>
-        </motion.div>
-      ) : null}
+          </motion.div>
+        ) : null}
+      </div>
 
       {toast ? (
         <motion.div

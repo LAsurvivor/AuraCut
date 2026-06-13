@@ -1,89 +1,123 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const statuses = ["Analyze", "Cut", "Flip", "Host"];
-const blobs = [
-  { color: "bg-cyan-200/70", delay: 0, left: "24%", size: "32%", top: "20%" },
-  { color: "bg-violet-300/62", delay: 0.18, left: "48%", size: "40%", top: "16%" },
-  { color: "bg-sky-300/58", delay: 0.36, left: "35%", size: "46%", top: "40%" },
-  { color: "bg-fuchsia-300/42", delay: 0.54, left: "62%", size: "30%", top: "48%" }
-];
+const rows = 21;
+const columns = 33;
+
+type Dot = {
+  column: number;
+  delay: number;
+  duration: number;
+  id: string;
+  opacity: number;
+  pulseA: number;
+  pulseB: number;
+  row: number;
+  size: number;
+};
+
+function buildDots(): Dot[] {
+  const centerX = (columns - 1) / 2;
+  const centerY = (rows - 1) / 2;
+  const maxDistance = Math.hypot(centerX, centerY);
+
+  return Array.from({ length: rows * columns }, (_, index) => {
+    const row = Math.floor(index / columns);
+    const column = index % columns;
+    const dx = column - centerX;
+    const dy = row - centerY;
+    const distance = Math.hypot(dx, dy);
+    const focus = 1 - Math.min(distance / maxDistance, 1);
+    const flow =
+      Math.sin(column * 0.58 + row * 0.24) +
+      Math.cos(row * 0.7 - column * 0.18) +
+      Math.sin((column + row) * 0.31);
+    const normalizedFlow = (flow + 3) / 6;
+    const pulseA = 1.36 + normalizedFlow * 0.72 + focus * 0.28;
+    const pulseB = 0.96 + (1 - normalizedFlow) * 0.38 + focus * 0.16;
+
+    return {
+      column,
+      delay: normalizedFlow * 1.35 + Math.sin(row * 0.44) * 0.16 + Math.cos(column * 0.29) * 0.12,
+      duration: 2.45 + normalizedFlow * 0.72,
+      id: `${row}-${column}`,
+      opacity: 0.2 + focus * 0.34,
+      pulseA,
+      pulseB,
+      row,
+      size: 3 + focus * 1.4
+    };
+  });
+}
 
 export function ProcessingAnimation() {
   const [statusIndex, setStatusIndex] = useState(0);
+  const dots = useMemo(buildDots, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setStatusIndex((current) => (current + 1) % statuses.length);
-    }, 720);
+    }, 680);
 
     return () => window.clearInterval(timer);
   }, []);
 
   return (
     <motion.div
+      data-processing-root
       className="absolute inset-0 overflow-hidden rounded-[2rem] bg-[#030712]"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.22, ease: "easeOut" }}
     >
       <motion.div
-        className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(103,232,249,0.24),transparent_28%),radial-gradient(circle_at_72%_30%,rgba(192,132,252,0.2),transparent_30%),linear-gradient(135deg,rgba(8,13,30,0.98),rgba(2,6,23,0.98))]"
+        className="absolute inset-0 bg-[linear-gradient(145deg,rgba(12,18,36,0.98),rgba(2,6,23,0.98)_58%,rgba(7,12,28,0.98)),linear-gradient(90deg,rgba(34,211,238,0.08),transparent_36%,rgba(168,85,247,0.08)_72%,transparent)]"
         animate={{
-          filter: ["blur(18px) saturate(1.1)", "blur(30px) saturate(1.36)", "blur(20px) saturate(1.16)"],
-          scale: [1.02, 1.07, 1.03]
+          filter: ["saturate(1.04)", "saturate(1.22)", "saturate(1.08)"]
         }}
-        transition={{ duration: 3.4, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[62%] w-[46%] -translate-x-1/2 -translate-y-1/2 rounded-[44%] bg-cyan-100/14 blur-3xl"
-        animate={{ opacity: [0.26, 0.74, 0.32], scale: [0.88, 1.12, 0.98] }}
-        transition={{ duration: 2.8, repeat: Infinity, ease: "easeInOut" }}
-      />
+      <div className="absolute inset-0">
+        <motion.div
+          data-dot-field
+          className="grid h-full w-full grid-cols-[repeat(33,minmax(0,1fr))] grid-rows-[repeat(21,minmax(0,1fr))] place-items-center"
+          animate={{ opacity: [0.82, 1, 0.88, 0.96, 0.82] }}
+          transition={{ duration: 6.4, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden="true"
+        >
+          {dots.map((dot) => {
+            const hue =
+              dot.column < columns * 0.34
+                ? "bg-cyan-100 text-cyan-100"
+                : dot.column > columns * 0.68
+                  ? "bg-violet-200 text-violet-200"
+                  : "bg-sky-100 text-sky-100";
 
-      <div className="absolute inset-0 blur-2xl contrast-[1.9]">
-        {blobs.map((blob) => (
-          <motion.span
-            key={`${blob.left}-${blob.top}`}
-            className={`absolute rounded-full ${blob.color} mix-blend-screen`}
-            style={{ height: blob.size, left: blob.left, top: blob.top, width: blob.size }}
-            animate={{
-              borderRadius: ["44% 56% 52% 48%", "64% 36% 42% 58%", "48% 52% 66% 34%", "44% 56% 52% 48%"],
-              opacity: [0.26, 0.58, 0.32],
-              scale: [0.82, 1.16, 0.94],
-              x: [0, 22, -14, 0],
-              y: [0, -18, 14, 0]
-            }}
-            transition={{ delay: blob.delay, duration: 3.45, repeat: Infinity, ease: "easeInOut" }}
-          />
-        ))}
+            return (
+              <motion.span
+                key={dot.id}
+                className={`rounded-full ${hue} shadow-[0_0_16px_currentColor] will-change-transform`}
+                style={{ height: dot.size, opacity: dot.opacity, width: dot.size }}
+                animate={{
+                  opacity: [dot.opacity * 0.58, Math.min(dot.opacity + 0.48, 1), dot.opacity * 0.72, dot.opacity * 0.92],
+                  scale: [0.52, dot.pulseA, 0.68, dot.pulseB, 0.58]
+                }}
+                transition={{
+                  delay: dot.delay,
+                  duration: dot.duration,
+                  repeat: Infinity,
+                  repeatDelay: 0,
+                  ease: [0.22, 1, 0.36, 1]
+                }}
+              />
+            );
+          })}
+        </motion.div>
       </div>
-
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[54%] w-[34%] -translate-x-1/2 -translate-y-1/2 rounded-[48%] border border-cyan-100/16 bg-cyan-100/[0.035] shadow-[0_0_70px_rgba(103,232,249,0.18),inset_0_0_54px_rgba(103,232,249,0.08)]"
-        animate={{
-          filter: ["blur(9px)", "blur(2px)", "blur(12px)"],
-          opacity: [0.34, 0.82, 0.42],
-          scale: [0.94, 1.04, 0.98]
-        }}
-        transition={{ duration: 2.7, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      <motion.div
-        className="absolute -left-1/4 top-[-35%] h-[170%] w-24 rotate-12 bg-gradient-to-r from-transparent via-white/55 to-transparent blur-sm"
-        animate={{ x: ["0%", "650%"], opacity: [0, 0.72, 0] }}
-        transition={{ duration: 1.95, repeat: Infinity, ease: "easeInOut" }}
-      />
-
-      <div className="absolute inset-4 rounded-[1.55rem] border border-white/[0.07]" />
-      <motion.div
-        className="absolute inset-4 rounded-[1.55rem] border border-cyan-100/0"
-        animate={{ borderColor: ["rgba(103,232,249,0.04)", "rgba(103,232,249,0.28)", "rgba(103,232,249,0.06)"] }}
-        transition={{ duration: 2.25, repeat: Infinity, ease: "easeInOut" }}
-      />
 
       <div className="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-slate-950/68 px-4 py-2 text-xs font-semibold uppercase tracking-normal text-cyan-50/86 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
         <motion.span
