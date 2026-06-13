@@ -157,6 +157,11 @@ a {
   height: 430px;
 }
 
+.shared-image-canvas {
+  width: min(100%, 60rem);
+  height: 430px;
+}
+
 .preset-tray {
   position: absolute;
   top: calc(100% + 1.25rem);
@@ -188,6 +193,10 @@ a {
 
   .tool-canvas-expanded {
     width: min(100%, 60rem);
+    height: 600px;
+  }
+
+  .shared-image-canvas {
     height: 600px;
   }
 }

@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
+import { deleteStoredImage, saveImageFromUrl } from "@/lib/client-image-store";
+
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
@@ -186,11 +188,11 @@ export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLLabelElement>(null);
   const hostedBlobUrlsRef = useRef<Set<string>>(new Set());
-  const validShareUrlsRef = useRef<Set<string>>(new Set());
   const [state, setState] = useState<CardState>("idle");
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [shareId, setShareId] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastKind>(null);
@@ -279,6 +281,7 @@ export function TransformationCard() {
     setState("idle");
     setPreviewUrl(null);
     setResultUrl(null);
+    setShareId(null);
     setShareUrl(null);
     setError(null);
     setToast(null);
@@ -352,11 +355,18 @@ export function TransformationCard() {
       ? Promise.resolve(presetProcessedUrl)
       : createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
     const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
-    const nextShareUrl = `https://auracut.app/i/${crypto.randomUUID().slice(0, 8)}.png`;
+    const nextShareId = crypto.randomUUID().slice(0, 12);
+    const nextShareUrl = `${window.location.origin}/i/${nextShareId}`;
 
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
     }
+
+    await saveImageFromUrl({
+      filename: `auracut-${nextShareId}.png`,
+      id: nextShareId,
+      url: processedUrl
+    });
 
     setResultUrl((currentResultUrl) => {
       if (currentResultUrl !== nextPreviewUrl && !hostedBlobUrlsRef.current.has(currentResultUrl ?? "")) {
@@ -365,8 +375,8 @@ export function TransformationCard() {
 
       return processedUrl;
     });
+    setShareId(nextShareId);
     setShareUrl(nextShareUrl);
-    validShareUrlsRef.current.add(nextShareUrl);
     setProcessingProgress(100);
     setShowCompleteTick(true);
     setShowResultActions(false);
@@ -386,6 +396,7 @@ export function TransformationCard() {
     const nextPreviewUrl = URL.createObjectURL(file);
     setPreviewUrl(nextPreviewUrl);
     setResultUrl(null);
+    setShareId(null);
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
@@ -413,10 +424,8 @@ export function TransformationCard() {
     showToast("copied");
   }
 
-  function deleteImage(): void {
-    if (shareUrl) {
-      validShareUrlsRef.current.delete(shareUrl);
-    }
+  async function deleteImage(): Promise<void> {
+    const imageIdToDelete = shareId;
 
     if (resultUrl) {
       hostedBlobUrlsRef.current.delete(resultUrl);
@@ -424,6 +433,9 @@ export function TransformationCard() {
     }
 
     clearWorkspace();
+    if (imageIdToDelete) {
+      await deleteStoredImage(imageIdToDelete);
+    }
     showToast("deleted");
   }
 
@@ -436,6 +448,7 @@ export function TransformationCard() {
 
     setPreviewUrl(preset.url);
     setResultUrl(null);
+    setShareId(null);
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
@@ -684,7 +697,7 @@ export function TransformationCard() {
             </button>
             <button
               type="button"
-              onClick={deleteImage}
+              onClick={() => void deleteImage()}
               className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Delete"
               aria-label="Delete image"
