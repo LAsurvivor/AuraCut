@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { deleteStoredImage, getStoredImage } from "@/lib/client-image-store";
+import { deleteHostedImage, fetchHostedImage } from "@/lib/image-api";
 
 type ViewerState = "loading" | "ready" | "missing" | "error";
+type DeleteMode = "local" | "remote" | "unavailable";
 
 function readImageIdFromUrl(): string | null {
   const imageId = new URLSearchParams(window.location.search).get("id");
@@ -15,7 +17,9 @@ function readImageIdFromUrl(): string | null {
 }
 
 export default function SharedImagePage() {
-  const [downloadName, setDownloadName] = useState("auracut.png");
+  const [downloadName, setDownloadName] = useState("auracut");
+  const [deleteMode, setDeleteMode] = useState<DeleteMode>("unavailable");
+  const [deleteToken, setDeleteToken] = useState<string | null>(null);
   const [imageId, setImageId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [state, setState] = useState<ViewerState>("loading");
@@ -25,13 +29,24 @@ export default function SharedImagePage() {
       return;
     }
 
-    await deleteStoredImage(imageId);
+    try {
+      if (deleteMode === "remote" && deleteToken) {
+        await deleteHostedImage({ deleteToken, id: imageId });
+      }
 
-    if (imageUrl) {
+      await deleteStoredImage(imageId);
+    } catch {
+      setState("error");
+      return;
+    }
+
+    if (imageUrl?.startsWith("blob:")) {
       URL.revokeObjectURL(imageUrl);
     }
 
     setImageUrl(null);
+    setDeleteMode("unavailable");
+    setDeleteToken(null);
     setState("missing");
   }
 
@@ -42,7 +57,7 @@ export default function SharedImagePage() {
 
     setImageId(nextImageId);
 
-    async function loadStoredImage(): Promise<void> {
+    async function loadImage(): Promise<void> {
       if (!nextImageId) {
         setState("missing");
         return;
@@ -55,23 +70,44 @@ export default function SharedImagePage() {
           return;
         }
 
-        if (!record) {
-          setState("missing");
+        if (record?.url) {
+          setDownloadName(record.filename);
+          setImageUrl(record.url);
+          setDeleteToken(record.deleteToken ?? null);
+          setDeleteMode(record.deleteToken ? "remote" : "unavailable");
+          setState("ready");
           return;
         }
 
-        objectUrl = URL.createObjectURL(record.blob);
-        setDownloadName(record.filename);
-        setImageUrl(objectUrl);
+        if (record?.blob) {
+          objectUrl = URL.createObjectURL(record.blob);
+          setDownloadName(record.filename);
+          setImageUrl(objectUrl);
+          setDeleteToken(null);
+          setDeleteMode("local");
+          setState("ready");
+          return;
+        }
+
+        const hostedImage = await fetchHostedImage(nextImageId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setDownloadName(`auracut-${hostedImage.id}`);
+        setImageUrl(hostedImage.processedUrl);
+        setDeleteToken(null);
+        setDeleteMode("unavailable");
         setState("ready");
       } catch {
         if (isActive) {
-          setState("error");
+          setState("missing");
         }
       }
     }
 
-    void loadStoredImage();
+    void loadImage();
 
     return () => {
       isActive = false;
@@ -112,7 +148,12 @@ export default function SharedImagePage() {
 
           {state === "ready" && imageUrl ? (
             <div className="checkerboard-dark checkerboard-animated absolute inset-0 flex items-center justify-center">
-              <img src={imageUrl} alt="AuraCut generated result" className="image-contain" />
+              <img
+                src={imageUrl}
+                alt="AuraCut generated result"
+                className="image-contain"
+                onError={() => setState("missing")}
+              />
             </div>
           ) : null}
 
@@ -140,14 +181,16 @@ export default function SharedImagePage() {
               <Download className="h-4 w-4" aria-hidden="true" />
               Download
             </a>
-            <button
-              type="button"
-              onClick={() => void deleteImage()}
-              className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm font-semibold text-white/72 shadow-[0_18px_70px_rgba(2,6,23,0.18)] transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              Delete
-            </button>
+            {deleteMode !== "unavailable" ? (
+              <button
+                type="button"
+                onClick={() => void deleteImage()}
+                className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm font-semibold text-white/72 shadow-[0_18px_70px_rgba(2,6,23,0.18)] transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Delete
+              </button>
+            ) : null}
           </div>
         ) : null}
 

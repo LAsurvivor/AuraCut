@@ -8,3 +8,15 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: MAX_UPLOAD_MB
+        value: "10"
+      - key: CLIPDROP_API_KEY
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: DELETE_TOKEN_SECRET
+        generateValue: true

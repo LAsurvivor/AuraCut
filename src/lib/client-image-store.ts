@@ -5,11 +5,14 @@ const DB_VERSION = 1;
 const STORE_NAME = "images";
 
 export type StoredImageRecord = {
-  blob: Blob;
+  blob?: Blob;
   createdAt: number;
+  deleteToken?: string;
   filename: string;
   id: string;
   mimeType: string;
+  originalUrl?: string;
+  url?: string;
 };
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -82,6 +85,36 @@ export async function saveImageFromUrl({
     filename,
     id,
     mimeType: blob.type || "image/png"
+  };
+
+  await runStoreTransaction("readwrite", (store) => store.put(record));
+
+  return record;
+}
+
+export async function saveHostedImageRecord({
+  deleteToken,
+  filename,
+  id,
+  mimeType = "image/png",
+  originalUrl,
+  url
+}: {
+  deleteToken?: string;
+  filename: string;
+  id: string;
+  mimeType?: string;
+  originalUrl?: string;
+  url: string;
+}): Promise<StoredImageRecord> {
+  const record: StoredImageRecord = {
+    createdAt: Date.now(),
+    deleteToken,
+    filename,
+    id,
+    mimeType,
+    originalUrl,
+    url
   };
 
   await runStoreTransaction("readwrite", (store) => store.put(record));

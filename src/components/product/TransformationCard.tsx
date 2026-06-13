@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
-import { deleteStoredImage, saveImageFromUrl } from "@/lib/client-image-store";
+import { deleteStoredImage, saveHostedImageRecord, saveImageFromUrl } from "@/lib/client-image-store";
+import { deleteHostedImage, transformUploadedImage } from "@/lib/image-api";
 import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
@@ -49,104 +50,6 @@ function revokeBlobUrl(url: string | null): void {
   }
 }
 
-function loadImage(sourceUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-
-    if (!sourceUrl.startsWith("blob:") && !sourceUrl.startsWith("data:")) {
-      image.crossOrigin = "anonymous";
-    }
-
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Could not load image."));
-    image.src = sourceUrl;
-  });
-}
-
-function colorDistance(data: Uint8ClampedArray, index: number, color: [number, number, number]): number {
-  const red = data[index] - color[0];
-  const green = data[index + 1] - color[1];
-  const blue = data[index + 2] - color[2];
-
-  return Math.sqrt(red * red + green * green + blue * blue);
-}
-
-function sampleBackgroundColor(data: Uint8ClampedArray, width: number, height: number): [number, number, number] {
-  const samplePoints = [
-    [0, 0],
-    [width - 1, 0],
-    [0, height - 1],
-    [width - 1, height - 1],
-    [Math.floor(width / 2), 0],
-    [Math.floor(width / 2), height - 1],
-    [0, Math.floor(height / 2)],
-    [width - 1, Math.floor(height / 2)]
-  ];
-
-  const total = samplePoints.reduce(
-    (sum, [x, y]) => {
-      const index = (y * width + x) * 4;
-      sum[0] += data[index];
-      sum[1] += data[index + 1];
-      sum[2] += data[index + 2];
-      return sum;
-    },
-    [0, 0, 0]
-  );
-
-  return [total[0] / samplePoints.length, total[1] / samplePoints.length, total[2] / samplePoints.length];
-}
-
-async function createMockProcessedPng(sourceUrl: string): Promise<string> {
-  const image = await loadImage(sourceUrl);
-  const maxSide = 1500;
-  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
-  const width = Math.max(1, Math.round(image.naturalWidth * scale));
-  const height = Math.max(1, Math.round(image.naturalHeight * scale));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-
-  if (!context) {
-    throw new Error("Canvas is unavailable.");
-  }
-
-  context.translate(width, 0);
-  context.scale(-1, 1);
-  context.drawImage(image, 0, 0, width, height);
-
-  const imageData = context.getImageData(0, 0, width, height);
-  const backgroundColor = sampleBackgroundColor(imageData.data, width, height);
-  const transparentDistance = 46;
-  const featherDistance = 88;
-
-  for (let index = 0; index < imageData.data.length; index += 4) {
-    const distance = colorDistance(imageData.data, index, backgroundColor);
-
-    if (distance < transparentDistance) {
-      imageData.data[index + 3] = 0;
-    } else if (distance < featherDistance) {
-      const opacity = (distance - transparentDistance) / (featherDistance - transparentDistance);
-      imageData.data[index + 3] = Math.round(imageData.data[index + 3] * opacity);
-    }
-  }
-
-  context.putImageData(imageData, 0, 0);
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Could not create mock PNG."));
-        return;
-      }
-
-      resolve(URL.createObjectURL(blob));
-    }, "image/png");
-  });
-}
-
 function validateFile(file: File): string | undefined {
   const extension = file.name.split(".").pop()?.toLowerCase();
   const hasAllowedExtension = extension ? ["png", "jpg", "jpeg", "webp"].includes(extension) : false;
@@ -185,6 +88,14 @@ async function copyTextToClipboard(text: string): Promise<void> {
   }
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Could not transform this image.";
+}
+
 export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLLabelElement>(null);
@@ -193,6 +104,7 @@ export function TransformationCard() {
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [deleteToken, setDeleteToken] = useState<string | null>(null);
   const [shareId, setShareId] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -282,6 +194,7 @@ export function TransformationCard() {
     setState("idle");
     setPreviewUrl(null);
     setResultUrl(null);
+    setDeleteToken(null);
     setShareId(null);
     setShareUrl(null);
     setError(null);
@@ -346,28 +259,18 @@ export function TransformationCard() {
     });
   }
 
-  async function simulateProcessing(nextPreviewUrl: string, presetProcessedUrl?: string): Promise<void> {
+  function prepareProcessingState(): void {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     setState("processing");
     centerCanvasInViewport();
-    const processedPromise = presetProcessedUrl
-      ? Promise.resolve(presetProcessedUrl)
-      : createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
-    const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
-    const nextShareId = crypto.randomUUID().slice(0, 12);
-    const nextShareUrl = createShareUrl(nextShareId);
+  }
 
+  function revealResult(processedUrl: string, nextPreviewUrl: string): void {
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
     }
-
-    await saveImageFromUrl({
-      filename: `auracut-${nextShareId}.png`,
-      id: nextShareId,
-      url: processedUrl
-    });
 
     setResultUrl((currentResultUrl) => {
       if (currentResultUrl !== nextPreviewUrl && !hostedBlobUrlsRef.current.has(currentResultUrl ?? "")) {
@@ -376,12 +279,57 @@ export function TransformationCard() {
 
       return processedUrl;
     });
-    setShareId(nextShareId);
-    setShareUrl(nextShareUrl);
     setProcessingProgress(100);
     setShowCompleteTick(true);
     setShowResultActions(false);
     setState("result");
+  }
+
+  async function processUploadedImage(file: File, nextPreviewUrl: string): Promise<void> {
+    try {
+      prepareProcessingState();
+      const [image] = await Promise.all([transformUploadedImage(file), wait(1400)]);
+      const nextShareUrl = createShareUrl(image.id);
+
+      await saveHostedImageRecord({
+        deleteToken: image.deleteToken,
+        filename: `auracut-${image.id}`,
+        id: image.id,
+        mimeType: "image/png",
+        originalUrl: image.originalUrl,
+        url: image.processedUrl
+      });
+
+      setShareId(image.id);
+      setShareUrl(nextShareUrl);
+      setDeleteToken(image.deleteToken ?? null);
+      revealResult(image.processedUrl, nextPreviewUrl);
+    } catch (error) {
+      setError(getErrorMessage(error));
+      setProcessingProgress(0);
+      setShowCompleteTick(false);
+      setShowResultActions(false);
+      setState("error");
+    }
+  }
+
+  async function simulatePresetProcessing(nextPreviewUrl: string, presetProcessedUrl: string): Promise<void> {
+    prepareProcessingState();
+    await wait(3350);
+
+    const nextShareId = crypto.randomUUID().slice(0, 12);
+    const nextShareUrl = createShareUrl(nextShareId);
+
+    await saveImageFromUrl({
+      filename: `auracut-${nextShareId}`,
+      id: nextShareId,
+      url: presetProcessedUrl
+    });
+
+    setShareId(nextShareId);
+    setShareUrl(nextShareUrl);
+    setDeleteToken(null);
+    revealResult(presetProcessedUrl, nextPreviewUrl);
   }
 
   async function handleFile(file: File) {
@@ -397,6 +345,7 @@ export function TransformationCard() {
     const nextPreviewUrl = URL.createObjectURL(file);
     setPreviewUrl(nextPreviewUrl);
     setResultUrl(null);
+    setDeleteToken(null);
     setShareId(null);
     setShareUrl(null);
     setError(null);
@@ -404,7 +353,7 @@ export function TransformationCard() {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
-    await simulateProcessing(nextPreviewUrl);
+    await processUploadedImage(file, nextPreviewUrl);
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
@@ -427,17 +376,27 @@ export function TransformationCard() {
 
   async function deleteImage(): Promise<void> {
     const imageIdToDelete = shareId;
+    const deleteTokenToUse = deleteToken;
 
-    if (resultUrl) {
-      hostedBlobUrlsRef.current.delete(resultUrl);
-      revokeBlobUrl(resultUrl);
-    }
+    try {
+      if (imageIdToDelete && deleteTokenToUse) {
+        await deleteHostedImage({ deleteToken: deleteTokenToUse, id: imageIdToDelete });
+      }
 
-    clearWorkspace();
-    if (imageIdToDelete) {
-      await deleteStoredImage(imageIdToDelete);
+      if (resultUrl) {
+        hostedBlobUrlsRef.current.delete(resultUrl);
+        revokeBlobUrl(resultUrl);
+      }
+
+      clearWorkspace();
+      if (imageIdToDelete) {
+        await deleteStoredImage(imageIdToDelete);
+      }
+      showToast("deleted");
+    } catch (error) {
+      setError(getErrorMessage(error));
+      setState("error");
     }
-    showToast("deleted");
   }
 
   function startAgain(): void {
@@ -449,6 +408,7 @@ export function TransformationCard() {
 
     setPreviewUrl(preset.url);
     setResultUrl(null);
+    setDeleteToken(null);
     setShareId(null);
     setShareUrl(null);
     setError(null);
@@ -456,7 +416,13 @@ export function TransformationCard() {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
-    await simulateProcessing(preset.url, preset.processedUrl);
+    if (!preset.processedUrl) {
+      setError("This preset is not available.");
+      setState("error");
+      return;
+    }
+
+    await simulatePresetProcessing(preset.url, preset.processedUrl);
   }
 
   return (

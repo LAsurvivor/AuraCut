@@ -50,7 +50,7 @@ export function AuraCutHome() {
             Cut clean, share instantly.
           </h1>
           <p className="mt-6 max-w-xl text-lg font-medium leading-8 tracking-normal text-white/66 sm:text-xl">
-            100% background removal for free.
+            AI background removal for free.
           </p>
 
           <div className="mt-10">
