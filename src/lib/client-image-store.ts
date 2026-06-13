@@ -7,6 +7,7 @@ const STORE_NAME = "images";
 export type StoredImageRecord = {
   blob?: Blob;
   createdAt: number;
+  deletedAt?: number;
   deleteToken?: string;
   filename: string;
   id: string;
@@ -128,4 +129,18 @@ export async function getStoredImage(id: string): Promise<StoredImageRecord | un
 
 export async function deleteStoredImage(id: string): Promise<void> {
   await runStoreTransaction("readwrite", (store) => store.delete(id));
+}
+
+export async function markStoredImageDeleted(id: string): Promise<void> {
+  const existingRecord = await getStoredImage(id).catch(() => undefined);
+  const deletedAt = Date.now();
+  const record: StoredImageRecord = {
+    createdAt: existingRecord?.createdAt ?? deletedAt,
+    deletedAt,
+    filename: existingRecord?.filename ?? `auracut-${id}`,
+    id,
+    mimeType: existingRecord?.mimeType ?? "image/png"
+  };
+
+  await runStoreTransaction("readwrite", (store) => store.put(record));
 }

@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowLeft, Download, Image as ImageIcon, RefreshCw, Tras
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { deleteStoredImage, getStoredImage } from "@/lib/client-image-store";
+import { getStoredImage, markStoredImageDeleted } from "@/lib/client-image-store";
 import { deleteHostedImage, fetchHostedImage } from "@/lib/image-api";
 
 type ViewerState = "loading" | "ready" | "missing" | "error";
@@ -34,7 +34,7 @@ export default function SharedImagePage() {
         await deleteHostedImage({ deleteToken, id: imageId });
       }
 
-      await deleteStoredImage(imageId);
+      await markStoredImageDeleted(imageId);
     } catch {
       setState("error");
       return;
@@ -67,6 +67,11 @@ export default function SharedImagePage() {
         const record = await getStoredImage(nextImageId);
 
         if (!isActive) {
+          return;
+        }
+
+        if (record?.deletedAt) {
+          setState("missing");
           return;
         }
 

@@ -4,14 +4,14 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
-import { deleteStoredImage, saveHostedImageRecord, saveImageFromUrl } from "@/lib/client-image-store";
+import { markStoredImageDeleted, saveHostedImageRecord, saveImageFromUrl } from "@/lib/client-image-store";
 import { deleteHostedImage, transformUploadedImage } from "@/lib/image-api";
 import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
-type ToastKind = "copied" | "downloaded" | "deleted" | null;
+type ToastKind = "copied" | "deleteFailed" | "downloaded" | "deleted" | null;
 type PresetImage = {
   name: string;
   processedUrl?: string;
@@ -377,25 +377,27 @@ export function TransformationCard() {
   async function deleteImage(): Promise<void> {
     const imageIdToDelete = shareId;
     const deleteTokenToUse = deleteToken;
+    const resultUrlToClear = resultUrl;
+
+    if (resultUrlToClear) {
+      hostedBlobUrlsRef.current.delete(resultUrlToClear);
+      revokeBlobUrl(resultUrlToClear);
+    }
+
+    clearWorkspace();
 
     try {
+      if (imageIdToDelete) {
+        await markStoredImageDeleted(imageIdToDelete).catch(() => undefined);
+      }
+
       if (imageIdToDelete && deleteTokenToUse) {
         await deleteHostedImage({ deleteToken: deleteTokenToUse, id: imageIdToDelete });
       }
 
-      if (resultUrl) {
-        hostedBlobUrlsRef.current.delete(resultUrl);
-        revokeBlobUrl(resultUrl);
-      }
-
-      clearWorkspace();
-      if (imageIdToDelete) {
-        await deleteStoredImage(imageIdToDelete);
-      }
       showToast("deleted");
-    } catch (error) {
-      setError(getErrorMessage(error));
-      setState("error");
+    } catch {
+      showToast("deleteFailed");
     }
   }
 
@@ -703,7 +705,9 @@ export function TransformationCard() {
             ? "URL copied"
             : toast === "deleted"
               ? "Image deleted"
-              : "Download started"}
+              : toast === "deleteFailed"
+                ? "Delete failed"
+                : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>

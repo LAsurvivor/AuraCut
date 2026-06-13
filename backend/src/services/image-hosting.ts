@@ -25,6 +25,11 @@ type CloudinaryResource = {
   secure_url?: string;
 };
 
+const DELETED_MARKER_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lmQ8pQAAAABJRU5ErkJggg==",
+  "base64"
+);
+
 function configureCloudinary(config: AppConfig): void {
   if (!config.cloudinaryCloudName || !config.cloudinaryApiKey || !config.cloudinaryApiSecret) {
     throw new HttpError(503, "cloudinary_not_configured", "Image hosting is not configured yet.");
@@ -88,6 +93,47 @@ async function readHostedImage(publicId: string, config: AppConfig): Promise<Hos
   } catch (error) {
     if (isCloudinaryNotFound(error) || isLookupHttpError(error)) {
       throw new HttpError(404, "image_not_found", "The requested image is not available.");
+    }
+
+    throw new HttpError(503, "image_lookup_failed", "Could not read the hosted image.");
+  }
+}
+
+function uploadDeletedMarker(publicId: string, config: AppConfig): Promise<void> {
+  configureCloudinary(config);
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        invalidate: true,
+        overwrite: true,
+        public_id: publicId,
+        resource_type: "image",
+        tags: ["auracut", "deleted"]
+      },
+      (error) => {
+        if (error) {
+          reject(new HttpError(503, "image_delete_failed", "Cloudinary deletion marker failed."));
+          return;
+        }
+
+        resolve();
+      }
+    );
+
+    Readable.from(DELETED_MARKER_PNG).pipe(uploadStream);
+  });
+}
+
+async function hostedImageExists(publicId: string, config: AppConfig): Promise<boolean> {
+  configureCloudinary(config);
+
+  try {
+    await cloudinary.api.resource(publicId, { resource_type: "image" });
+    return true;
+  } catch (error) {
+    if (isCloudinaryNotFound(error)) {
+      return false;
     }
 
     throw new HttpError(503, "image_lookup_failed", "Could not read the hosted image.");
@@ -158,6 +204,10 @@ export async function hostImages(
 }
 
 export async function getHostedImages(publicIds: ImagePublicIds, config: AppConfig): Promise<HostedImagePair> {
+  if (await hostedImageExists(publicIds.deleted, config)) {
+    throw new HttpError(404, "image_not_found", "The requested image is not available.");
+  }
+
   const [original, processed] = await Promise.all([
     readHostedImage(publicIds.original, config),
     readHostedImage(publicIds.processed, config)
@@ -171,6 +221,8 @@ export async function getHostedImages(publicIds: ImagePublicIds, config: AppConf
 
 export async function deleteHostedImages(publicIds: ImagePublicIds, config: AppConfig): Promise<void> {
   configureCloudinary(config);
+
+  await uploadDeletedMarker(publicIds.deleted, config);
 
   const results = await Promise.allSettled([
     cloudinary.uploader.destroy(publicIds.original, { invalidate: true, resource_type: "image" }),
