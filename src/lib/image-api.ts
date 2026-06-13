@@ -26,6 +26,8 @@ type ApiErrorResponse = {
   };
 };
 
+const MAX_REQUEST_ATTEMPTS = 3;
+
 function getApiBaseUrl(): string {
   const explicitBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
 
@@ -48,6 +50,14 @@ function apiUrl(path: string): string {
   return `${getApiBaseUrl()}${path}`;
 }
 
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+function isRetryableStatus(status: number): boolean {
+  return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+}
+
 async function readApiError(response: Response): Promise<string> {
   const contentType = response.headers.get("content-type") ?? "";
 
@@ -61,19 +71,39 @@ async function readApiError(response: Response): Promise<string> {
 }
 
 async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
-  let response: Response;
+  let lastError: Error | undefined;
 
-  try {
-    response = await fetch(input, init);
-  } catch {
-    throw new Error("Image service is unavailable. Start the backend and try again.");
+  for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt += 1) {
+    let response: Response;
+
+    try {
+      response = await fetch(input, init);
+    } catch {
+      lastError = new Error("Image service is unavailable. Start the backend and try again.");
+
+      if (attempt === MAX_REQUEST_ATTEMPTS) {
+        throw lastError;
+      }
+
+      await wait(250 * attempt);
+      continue;
+    }
+
+    if (response.ok) {
+      return (await response.json()) as T;
+    }
+
+    const message = await readApiError(response);
+    lastError = new Error(message);
+
+    if (attempt === MAX_REQUEST_ATTEMPTS || !isRetryableStatus(response.status)) {
+      throw lastError;
+    }
+
+    await wait(250 * attempt);
   }
 
-  if (!response.ok) {
-    throw new Error(await readApiError(response));
-  }
-
-  return (await response.json()) as T;
+  throw lastError ?? new Error("The image service returned an error.");
 }
 
 export async function transformUploadedImage(file: File): Promise<HostedImagePayload> {
@@ -82,6 +112,18 @@ export async function transformUploadedImage(file: File): Promise<HostedImagePay
 
   const response = await fetchJson<ImageResponse>(apiUrl("/api/images"), {
     body: form,
+    method: "POST"
+  });
+
+  return response.image;
+}
+
+export async function transformPresetImage(preset: string): Promise<HostedImagePayload> {
+  const response = await fetchJson<ImageResponse>(apiUrl("/api/images/presets"), {
+    body: JSON.stringify({ preset }),
+    headers: {
+      "content-type": "application/json"
+    },
     method: "POST"
   });
 

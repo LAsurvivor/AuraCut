@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config/env.js";
 import { HttpError } from "../errors/http-error.js";
+import { isRetryableHttpStatus, withRetry } from "../utils/retry.js";
 import type { ValidatedImageUpload } from "../utils/upload-validation.js";
 
 export type BackgroundRemovalResult = {
@@ -8,6 +9,13 @@ export type BackgroundRemovalResult = {
   mimeType: string;
   remainingCredits?: string;
 };
+
+class RetryableBackgroundRemovalError extends Error {
+  constructor(readonly status: number) {
+    super(`Retryable background removal status: ${status}`);
+    this.name = "RetryableBackgroundRemovalError";
+  }
+}
 
 async function readUpstreamError(response: Response): Promise<string> {
   const contentType = response.headers.get("content-type") ?? "";
@@ -28,20 +36,39 @@ export async function removeBackground(upload: ValidatedImageUpload, config: App
     throw new HttpError(503, "clipdrop_not_configured", "Background removal is not configured yet.");
   }
 
-  const form = new FormData();
   const uploadArrayBuffer = new ArrayBuffer(upload.buffer.byteLength);
   new Uint8Array(uploadArrayBuffer).set(upload.buffer);
   const imageBlob = new Blob([uploadArrayBuffer], { type: upload.detectedMimeType });
-  form.append("image_file", imageBlob, upload.filename);
+  let response: Response;
 
-  const response = await fetch("https://clipdrop-api.co/remove-background/v1", {
-    method: "POST",
-    headers: {
-      accept: "image/png",
-      "x-api-key": config.clipdropApiKey
-    },
-    body: form
-  });
+  try {
+    response = await withRetry(
+      async () => {
+        const form = new FormData();
+        form.append("image_file", imageBlob, upload.filename);
+
+        const nextResponse = await fetch("https://clipdrop-api.co/remove-background/v1", {
+          method: "POST",
+          headers: {
+            accept: "image/png",
+            "x-api-key": config.clipdropApiKey as string
+          },
+          body: form
+        });
+
+        if (isRetryableHttpStatus(nextResponse.status)) {
+          throw new RetryableBackgroundRemovalError(nextResponse.status);
+        }
+
+        return nextResponse;
+      },
+      {
+        shouldRetry: (error) => error instanceof RetryableBackgroundRemovalError || error instanceof TypeError
+      }
+    );
+  } catch {
+    throw new HttpError(502, "background_removal_failed", "Background removal failed after retrying.");
+  }
   const responseMimeType = response.headers.get("content-type") ?? "application/octet-stream";
 
   if (!response.ok) {

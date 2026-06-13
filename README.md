@@ -31,11 +31,14 @@ public/                Static images and presets
 ```txt
 GET    /api/health
 POST   /api/images
+POST   /api/images/presets
 GET    /api/images/:id
 DELETE /api/images/:id
 ```
 
 `POST /api/images` accepts one multipart image file. Supported formats are PNG, JPG/JPEG, and WEBP.
+
+`POST /api/images/presets` hosts one of the built-in sample image pairs on Cloudinary without spending background-removal credits.
 
 `GET /api/images/:id` returns the hosted original and processed image URLs.
 
@@ -118,4 +121,4 @@ The backend serves `/api/*` and, when `out/` exists, the static frontend.
 
 - Upload validation checks file signatures rather than trusting extensions.
 - Delete authorization uses an HMAC token bound to the image id.
-- The frontend still includes preset demo images so reviewers can explore the UI without spending background-removal credits.
+- Built-in preset images are hosted through the same Cloudinary flow as uploaded images, but they skip the background-removal API to avoid spending credits.

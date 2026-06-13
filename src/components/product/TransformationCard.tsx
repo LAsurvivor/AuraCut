@@ -4,8 +4,8 @@ import { motion } from "framer-motion";
 import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
-import { markStoredImageDeleted, saveHostedImageRecord, saveImageFromUrl } from "@/lib/client-image-store";
-import { deleteHostedImage, transformUploadedImage } from "@/lib/image-api";
+import { markStoredImageDeleted, saveHostedImageRecord } from "@/lib/client-image-store";
+import { deleteHostedImage, transformPresetImage, transformUploadedImage } from "@/lib/image-api";
 import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
@@ -13,6 +13,7 @@ import { ProcessingAnimation } from "./ProcessingAnimation";
 type CardState = "idle" | "processing" | "result" | "error";
 type ToastKind = "copied" | "deleteFailed" | "downloaded" | "deleted" | null;
 type PresetImage = {
+  key: string;
   name: string;
   processedUrl?: string;
   url: string;
@@ -23,21 +24,25 @@ const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
 const MAX_UPLOAD_MB = 10;
 const PRESET_IMAGES: PresetImage[] = [
   {
+    key: "cavapoo",
     name: "Cavapoo",
     processedUrl: withBasePath("/images/presets/cavapoo-after-flipped.png"),
     url: withBasePath("/images/presets/cavapoo-before.avif")
   },
   {
+    key: "boy",
     name: "Portrait",
     processedUrl: withBasePath("/images/presets/boy-after-flipped.png"),
     url: withBasePath("/images/presets/boy-before.avif")
   },
   {
+    key: "ferrari",
     name: "Ferrari",
     processedUrl: withBasePath("/images/presets/ferrari-after-flipped.png"),
     url: withBasePath("/images/presets/ferrari-before.jpg")
   },
   {
+    key: "earrings",
     name: "Earrings",
     processedUrl: withBasePath("/images/presets/earrings-after-flipped.png"),
     url: withBasePath("/images/presets/earrings-before.jpeg")
@@ -313,23 +318,32 @@ export function TransformationCard() {
     }
   }
 
-  async function simulatePresetProcessing(nextPreviewUrl: string, presetProcessedUrl: string): Promise<void> {
-    prepareProcessingState();
-    await wait(3350);
+  async function simulatePresetProcessing(nextPreviewUrl: string, preset: PresetImage): Promise<void> {
+    try {
+      prepareProcessingState();
+      const [image] = await Promise.all([transformPresetImage(preset.key), wait(3350)]);
+      const nextShareUrl = createShareUrl(image.id);
 
-    const nextShareId = crypto.randomUUID().slice(0, 12);
-    const nextShareUrl = createShareUrl(nextShareId);
+      await saveHostedImageRecord({
+        deleteToken: image.deleteToken,
+        filename: `auracut-${image.id}`,
+        id: image.id,
+        mimeType: "image/png",
+        originalUrl: image.originalUrl,
+        url: image.processedUrl
+      });
 
-    await saveImageFromUrl({
-      filename: `auracut-${nextShareId}`,
-      id: nextShareId,
-      url: presetProcessedUrl
-    });
-
-    setShareId(nextShareId);
-    setShareUrl(nextShareUrl);
-    setDeleteToken(null);
-    revealResult(presetProcessedUrl, nextPreviewUrl);
+      setShareId(image.id);
+      setShareUrl(nextShareUrl);
+      setDeleteToken(image.deleteToken ?? null);
+      revealResult(image.processedUrl, nextPreviewUrl);
+    } catch (error) {
+      setError(getErrorMessage(error));
+      setProcessingProgress(0);
+      setShowCompleteTick(false);
+      setShowResultActions(false);
+      setState("error");
+    }
   }
 
   async function handleFile(file: File) {
@@ -424,7 +438,7 @@ export function TransformationCard() {
       return;
     }
 
-    await simulatePresetProcessing(preset.url, preset.processedUrl);
+    await simulatePresetProcessing(preset.url, preset);
   }
 
   return (

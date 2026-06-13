@@ -8,6 +8,7 @@ import { removeBackground } from "../services/background-removal.js";
 import { createDeleteToken, verifyDeleteToken } from "../services/delete-token.js";
 import { deleteHostedImages, getHostedImages, hostImages } from "../services/image-hosting.js";
 import { flipHorizontally } from "../services/image-processing.js";
+import { loadPresetImagePair } from "../services/preset-images.js";
 import { buildImagePublicIds } from "../utils/public-ids.js";
 import { validateImageUpload } from "../utils/upload-validation.js";
 
@@ -15,6 +16,10 @@ const IMAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-
 
 type ImageParams = {
   id: string;
+};
+
+type PresetBody = {
+  preset?: string;
 };
 
 function requireCompleteConfiguration(config: AppConfig): void {
@@ -65,6 +70,37 @@ export async function registerImageRoutes(app: FastifyInstance, config: AppConfi
           processedSizeBytes: hostedImages.processed.bytes,
           sourceSizeBytes: upload.sizeBytes,
           width: flipped.width
+        },
+        originalUrl: hostedImages.original.secureUrl,
+        processedUrl: hostedImages.processed.secureUrl
+      }
+    });
+  });
+
+  app.post<{ Body: PresetBody }>("/api/images/presets", async (request, reply) => {
+    requireCompleteConfiguration(config);
+
+    const preset = request.body?.preset;
+
+    if (!preset) {
+      throw new HttpError(400, "preset_not_found", "The selected sample image is not available.");
+    }
+
+    const presetImage = await loadPresetImagePair(preset);
+    const id = randomUUID();
+    const createdAt = new Date().toISOString();
+    const publicIds = buildImagePublicIds(id);
+    const hostedImages = await hostImages(presetImage.originalBuffer, presetImage.processedBuffer, publicIds, config);
+
+    return reply.status(201).send({
+      image: {
+        createdAt,
+        deleteToken: createDeleteToken(id, config.deleteTokenSecret as string),
+        id,
+        metadata: {
+          format: hostedImages.processed.format,
+          processedSizeBytes: hostedImages.processed.bytes,
+          sourceSizeBytes: hostedImages.original.bytes
         },
         originalUrl: hostedImages.original.secureUrl,
         processedUrl: hostedImages.processed.secureUrl

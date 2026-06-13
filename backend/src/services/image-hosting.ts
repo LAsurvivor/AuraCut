@@ -5,6 +5,7 @@ import { v2 as cloudinary } from "cloudinary";
 import type { AppConfig } from "../config/env.js";
 import { HttpError } from "../errors/http-error.js";
 import type { ImagePublicIds } from "../utils/public-ids.js";
+import { withRetry } from "../utils/retry.js";
 
 export type HostedImage = {
   bytes: number;
@@ -43,42 +44,54 @@ function configureCloudinary(config: AppConfig): void {
   });
 }
 
-function uploadBuffer(buffer: Buffer, publicId: string, config: AppConfig): Promise<HostedImage> {
+async function uploadBuffer(buffer: Buffer, publicId: string, config: AppConfig): Promise<HostedImage> {
   configureCloudinary(config);
 
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        invalidate: true,
-        overwrite: true,
-        public_id: publicId,
-        resource_type: "image",
-        tags: ["auracut"]
-      },
-      (error, result) => {
-        if (error || !result) {
-          reject(new HttpError(503, "image_hosting_failed", "Cloudinary upload failed."));
-          return;
-        }
+  try {
+    return await withRetry(
+      () =>
+        new Promise<HostedImage>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              invalidate: true,
+              overwrite: true,
+              public_id: publicId,
+              resource_type: "image",
+              tags: ["auracut"]
+            },
+            (error, result) => {
+              if (error || !result) {
+                reject(error ?? new HttpError(503, "image_hosting_failed", "Cloudinary upload failed."));
+                return;
+              }
 
-        resolve({
-          bytes: result.bytes,
-          format: result.format,
-          publicId: result.public_id,
-          secureUrl: result.secure_url
-        });
+              resolve({
+                bytes: result.bytes,
+                format: result.format,
+                publicId: result.public_id,
+                secureUrl: result.secure_url
+              });
+            }
+          );
+
+          Readable.from(buffer).pipe(uploadStream);
+        }),
+      {
+        shouldRetry: isRetryableCloudinaryError
       }
     );
-
-    Readable.from(buffer).pipe(uploadStream);
-  });
+  } catch {
+    throw new HttpError(503, "image_hosting_failed", "Cloudinary upload failed.");
+  }
 }
 
 async function readHostedImage(publicId: string, config: AppConfig): Promise<HostedImage> {
   configureCloudinary(config);
 
   try {
-    const result = (await cloudinary.api.resource(publicId, { resource_type: "image" })) as CloudinaryResource;
+    const result = (await withRetry(() => cloudinary.api.resource(publicId, { resource_type: "image" }), {
+      shouldRetry: (error) => !isCloudinaryNotFound(error) && isRetryableCloudinaryError(error)
+    })) as CloudinaryResource;
 
     if (!result.secure_url) {
       throw new HttpError(404, "image_not_found", "The requested image is not available.");
@@ -99,37 +112,49 @@ async function readHostedImage(publicId: string, config: AppConfig): Promise<Hos
   }
 }
 
-function uploadDeletedMarker(publicId: string, config: AppConfig): Promise<void> {
+async function uploadDeletedMarker(publicId: string, config: AppConfig): Promise<void> {
   configureCloudinary(config);
 
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        invalidate: true,
-        overwrite: true,
-        public_id: publicId,
-        resource_type: "image",
-        tags: ["auracut", "deleted"]
-      },
-      (error) => {
-        if (error) {
-          reject(new HttpError(503, "image_delete_failed", "Cloudinary deletion marker failed."));
-          return;
-        }
+  try {
+    await withRetry(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              invalidate: true,
+              overwrite: true,
+              public_id: publicId,
+              resource_type: "image",
+              tags: ["auracut", "deleted"]
+            },
+            (error) => {
+              if (error) {
+                reject(error);
+                return;
+              }
 
-        resolve();
+              resolve();
+            }
+          );
+
+          Readable.from(DELETED_MARKER_PNG).pipe(uploadStream);
+        }),
+      {
+        shouldRetry: isRetryableCloudinaryError
       }
     );
-
-    Readable.from(DELETED_MARKER_PNG).pipe(uploadStream);
-  });
+  } catch {
+    throw new HttpError(503, "image_delete_failed", "Cloudinary deletion marker failed.");
+  }
 }
 
 async function hostedImageExists(publicId: string, config: AppConfig): Promise<boolean> {
   configureCloudinary(config);
 
   try {
-    await cloudinary.api.resource(publicId, { resource_type: "image" });
+    await withRetry(() => cloudinary.api.resource(publicId, { resource_type: "image" }), {
+      shouldRetry: (error) => !isCloudinaryNotFound(error) && isRetryableCloudinaryError(error)
+    });
     return true;
   } catch (error) {
     if (isCloudinaryNotFound(error)) {
@@ -142,6 +167,12 @@ async function hostedImageExists(publicId: string, config: AppConfig): Promise<b
 
 function isCloudinaryNotFound(error: unknown): boolean {
   return readCloudinaryHttpCode(error) === 404;
+}
+
+function isRetryableCloudinaryError(error: unknown): boolean {
+  const status = readCloudinaryHttpCode(error);
+
+  return status === undefined || status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
 }
 
 function isLookupHttpError(error: unknown): boolean {
@@ -184,7 +215,7 @@ export async function hostImages(
 
   if (originalResult.status === "rejected" || processedResult.status === "rejected") {
     const fulfilled = uploadResults.filter((result): result is PromiseFulfilledResult<HostedImage> => result.status === "fulfilled");
-    await Promise.allSettled(fulfilled.map((asset) => cloudinary.uploader.destroy(asset.value.publicId)));
+    await Promise.allSettled(fulfilled.map((asset) => destroyHostedImage(asset.value.publicId)));
 
     if (originalResult.status === "rejected") {
       throw originalResult.reason;
@@ -225,12 +256,18 @@ export async function deleteHostedImages(publicIds: ImagePublicIds, config: AppC
   await uploadDeletedMarker(publicIds.deleted, config);
 
   const results = await Promise.allSettled([
-    cloudinary.uploader.destroy(publicIds.original, { invalidate: true, resource_type: "image" }),
-    cloudinary.uploader.destroy(publicIds.processed, { invalidate: true, resource_type: "image" })
+    destroyHostedImage(publicIds.original),
+    destroyHostedImage(publicIds.processed)
   ]);
   const rejected = results.find((result) => result.status === "rejected");
 
   if (rejected) {
     throw new HttpError(503, "image_delete_failed", "Cloudinary deletion failed.");
   }
+}
+
+async function destroyHostedImage(publicId: string): Promise<void> {
+  await withRetry(() => cloudinary.uploader.destroy(publicId, { invalidate: true, resource_type: "image" }), {
+    shouldRetry: isRetryableCloudinaryError
+  });
 }

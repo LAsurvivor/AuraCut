@@ -15,6 +15,8 @@ export type ErrorCode =
   | "missing_delete_token"
   | "missing_file"
   | "not_found"
+  | "preset_asset_missing"
+  | "preset_not_found"
   | "service_not_configured"
   | "too_many_files"
   | "unsupported_file_type";
