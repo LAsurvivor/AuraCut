@@ -7,7 +7,7 @@ import { DragEvent, useEffect, useRef, useState } from "react";
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
-type ToastKind = "copied" | "downloaded" | "deleted" | "kept" | null;
+type ToastKind = "copied" | "downloaded" | "deleted" | null;
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
@@ -186,6 +186,9 @@ export function TransformationCard() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastKind>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [showCompleteTick, setShowCompleteTick] = useState(false);
+  const [showResultActions, setShowResultActions] = useState(false);
   const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
 
   function revokeIfDisposable(url: string | null): void {
@@ -219,6 +222,48 @@ export function TransformationCard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (state !== "processing") {
+      return;
+    }
+
+    let animationFrame = 0;
+    let lastProgress = -1;
+    const startedAt = performance.now();
+    const duration = 3350;
+
+    const tick = (time: number) => {
+      const elapsed = Math.max(0, time - startedAt);
+      const rawProgress = Math.min(elapsed / duration, 1);
+      const easedProgress = 1 - Math.pow(1 - rawProgress, 2.45);
+      const nextProgress = Math.min(99, Math.round(easedProgress * 99));
+
+      if (nextProgress !== lastProgress) {
+        lastProgress = nextProgress;
+        setProcessingProgress(nextProgress);
+      }
+
+      animationFrame = window.requestAnimationFrame(tick);
+    };
+
+    animationFrame = window.requestAnimationFrame(tick);
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [state]);
+
+  useEffect(() => {
+    if (!showCompleteTick) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowCompleteTick(false);
+      setShowResultActions(true);
+    }, 720);
+
+    return () => window.clearTimeout(timer);
+  }, [showCompleteTick]);
+
   function clearWorkspace(): void {
     revokeIfDisposable(previewUrl);
 
@@ -229,6 +274,9 @@ export function TransformationCard() {
     setError(null);
     setToast(null);
     setShowOriginal(false);
+    setProcessingProgress(0);
+    setShowCompleteTick(false);
+    setShowResultActions(false);
     if (inputRef.current) {
       inputRef.current.value = "";
     }
@@ -286,6 +334,9 @@ export function TransformationCard() {
   }
 
   async function simulateProcessing(nextPreviewUrl: string): Promise<void> {
+    setProcessingProgress(0);
+    setShowCompleteTick(false);
+    setShowResultActions(false);
     setState("processing");
     centerCanvasInViewport();
     const processedPromise = createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
@@ -305,6 +356,9 @@ export function TransformationCard() {
     });
     setShareUrl(nextShareUrl);
     validShareUrlsRef.current.add(nextShareUrl);
+    setProcessingProgress(100);
+    setShowCompleteTick(true);
+    setShowResultActions(false);
     setState("result");
   }
 
@@ -324,6 +378,9 @@ export function TransformationCard() {
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
+    setProcessingProgress(0);
+    setShowCompleteTick(false);
+    setShowResultActions(false);
     await simulateProcessing(nextPreviewUrl);
   }
 
@@ -361,7 +418,6 @@ export function TransformationCard() {
 
   function startAgain(): void {
     clearWorkspace();
-    showToast("kept");
   }
 
   async function startPreset(url: string): Promise<void> {
@@ -372,6 +428,9 @@ export function TransformationCard() {
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
+    setProcessingProgress(0);
+    setShowCompleteTick(false);
+    setShowResultActions(false);
     await simulateProcessing(url);
   }
 
@@ -525,7 +584,32 @@ export function TransformationCard() {
       </div>
 
       <div className="mt-4 flex h-14 flex-col items-center gap-3">
-        {resultUrl ? (
+        {state === "processing" ? (
+          <motion.div
+            className="inline-flex h-10 min-w-20 items-center justify-center rounded-full border border-cyan-100/18 bg-cyan-100/10 px-5 text-sm font-semibold tabular-nums text-cyan-50 shadow-[0_18px_70px_rgba(34,211,238,0.16),inset_0_0_24px_rgba(34,211,238,0.08)] backdrop-blur-xl"
+            initial={{ opacity: 0, y: 8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.24, ease: "easeOut" }}
+            aria-live="polite"
+          >
+            {processingProgress}%
+          </motion.div>
+        ) : null}
+
+        {showCompleteTick ? (
+          <motion.div
+            className="inline-flex h-10 items-center gap-2 rounded-full border border-cyan-100/22 bg-cyan-100 px-4 text-sm font-semibold text-slate-950 shadow-[0_18px_70px_rgba(34,211,238,0.24)]"
+            initial={{ opacity: 0, scale: 0.76 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+            aria-label="Ready"
+          >
+            <Check className="h-4 w-4" aria-hidden="true" />
+            Ready
+          </motion.div>
+        ) : null}
+
+        {resultUrl && showResultActions ? (
           <motion.div
             className="flex flex-wrap justify-center gap-2 rounded-full border border-white/10 bg-white/[0.045] p-2 shadow-[0_18px_70px_rgba(2,6,23,0.22)] backdrop-blur-xl"
             initial={{ opacity: 0, y: 10 }}
@@ -615,8 +699,6 @@ export function TransformationCard() {
             ? "URL copied"
             : toast === "deleted"
               ? "Image deleted"
-            : toast === "kept"
-              ? "Previous URL kept active"
               : "Download started"}
         </motion.div>
       ) : null}
