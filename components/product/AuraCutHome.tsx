@@ -5,16 +5,18 @@ import { BorderGlow } from "./BorderGlow";
 import { TransformationCard } from "./TransformationCard";
 
 const DEMO_IMAGE =
-  "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=1000&h=1000&q=88";
+  "/images/aura-hero-demo.jpg";
+const DEMO_CUTOUT_IMAGE =
+  "/images/aura-hero-demo-cutout.png";
 
 function HeroRemovalDemo() {
   return (
     <div className="hero-demo relative mx-auto aspect-square w-full max-w-[23rem] overflow-visible">
       <img
-        src={DEMO_IMAGE}
+        src={DEMO_CUTOUT_IMAGE}
         alt=""
         className="absolute inset-0 h-full w-full rounded-[2rem] object-cover"
-        style={{ clipPath: "ellipse(33% 47% at 50% 50%)", filter: "drop-shadow(0 30px 52px rgba(0,0,0,0.34))" }}
+        style={{ filter: "drop-shadow(0 30px 52px rgba(0,0,0,0.34))" }}
       />
       <div className="hero-demo-before absolute inset-0 overflow-hidden rounded-[2rem]">
         <img src={DEMO_IMAGE} alt="" className="h-full w-full rounded-[2rem] object-cover" />
@@ -26,10 +28,12 @@ function HeroRemovalDemo() {
 
 export function AuraCutHome() {
   return (
-    <main className="relative min-h-screen overflow-hidden text-white">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <Aurora colorStops={["#7cff67", "#B497CF", "#5227FF"]} blend={0.48} amplitude={1.05} speed={0.62} />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_12%,rgba(255,255,255,0.07),transparent_28%),linear-gradient(180deg,rgba(3,7,18,0.28),rgba(3,7,18,0.94)_76%)]" />
+    <main className="relative isolate min-h-screen overflow-hidden text-white">
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-[42rem] sm:h-[48rem] lg:h-[54rem]">
+          <Aurora colorStops={["#7cff67", "#B497CF", "#5227FF"]} blend={0.48} amplitude={1.05} speed={0.62} />
+        </div>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.1),transparent_18rem),radial-gradient(circle_at_18%_58rem,rgba(34,211,238,0.08),transparent_18rem),radial-gradient(circle_at_82%_66rem,rgba(168,85,247,0.08),transparent_20rem),linear-gradient(180deg,rgba(3,7,18,0.04),rgba(3,7,18,0.68)_34rem,rgba(3,7,18,0.9)_100%)]" />
         <div className="noise-overlay absolute inset-0 opacity-[0.34]" />
       </div>
 
@@ -45,7 +49,7 @@ export function AuraCutHome() {
             Cut clean, share instantly.
           </h1>
           <p className="mt-6 max-w-xl text-lg font-medium leading-8 tracking-normal text-white/66 sm:text-xl">
-            Free AI background removal with instant hosted links.
+            100% background removal for free.
           </p>
 
           <div className="mt-10">

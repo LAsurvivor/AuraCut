@@ -15,19 +15,19 @@ const MAX_UPLOAD_MB = 10;
 const PRESET_IMAGES = [
   {
     name: "Portrait",
-    url: "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=900&q=84"
+    url: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=900&h=900&q=84"
   },
   {
-    name: "Product",
-    url: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=900&q=84"
+    name: "Watch",
+    url: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&h=900&q=84"
   },
   {
-    name: "Studio",
-    url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=84"
+    name: "Pet",
+    url: "https://images.unsplash.com/photo-1517849845537-4d257902454a?auto=format&fit=crop&w=900&h=900&q=84"
   },
   {
-    name: "Object",
-    url: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=84"
+    name: "Plant",
+    url: "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=900&h=900&q=84"
   }
 ];
 
@@ -500,20 +500,24 @@ export function TransformationCard() {
           aria-hidden={state !== "idle"}
         >
           <p className="text-sm text-white/42">
-            No image? <span className="text-white/68">Try one.</span>
+            No Image? <span className="text-white/68">Try one of these.</span>
           </p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-4 gap-3">
             {PRESET_IMAGES.map((preset) => (
               <button
                 key={preset.name}
                 type="button"
                 disabled={state !== "idle"}
                 onClick={() => void startPreset(preset.url)}
-                className="group h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] p-1 transition hover:-translate-y-0.5 hover:border-cyan-100/32 hover:bg-white/[0.08]"
+                className="group h-16 w-16 rounded-[1.15rem] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-100/70"
                 title={preset.name}
                 aria-label={`Try ${preset.name}`}
               >
-                <img src={preset.url} alt="" className="h-full w-full rounded-[0.85rem] object-contain" />
+                <img
+                  src={preset.url}
+                  alt=""
+                  className="h-full w-full rounded-[1.15rem] object-cover shadow-[0_14px_38px_rgba(2,6,23,0.32)] transition duration-300 group-hover:shadow-[0_18px_48px_rgba(34,211,238,0.18)]"
+                />
               </button>
             ))}
           </div>
@@ -610,7 +614,7 @@ export function TransformationCard() {
           {toast === "copied"
             ? "URL copied"
             : toast === "deleted"
-              ? "URL invalidated"
+              ? "Image deleted"
             : toast === "kept"
               ? "Previous URL kept active"
               : "Download started"}
