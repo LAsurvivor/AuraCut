@@ -19,7 +19,7 @@ export async function createServer(config: AppConfig): Promise<FastifyInstance> 
   });
 
   await app.register(cors, {
-    origin: config.nodeEnv === "production" ? false : true
+    origin: config.nodeEnv === "production" ? config.allowedOrigins : true
   });
   await app.register(multipart, {
     limits: {

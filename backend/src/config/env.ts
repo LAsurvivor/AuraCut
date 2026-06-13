@@ -4,6 +4,7 @@ const DEFAULT_MAX_UPLOAD_MB = 10;
 const BYTES_PER_MB = 1024 * 1024;
 
 export type AppConfig = {
+  allowedOrigins: string[];
   clipdropApiKey?: string;
   cloudinaryApiKey?: string;
   cloudinaryApiSecret?: string;
@@ -24,11 +25,23 @@ function parsePositiveInteger(value: string | undefined, fallback: number): numb
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function parseAllowedOrigins(value: string | undefined): string[] {
+  if (!value) {
+    return ["https://lasurvivor.github.io"];
+  }
+
+  return value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
 export function getConfig(): AppConfig {
   const maxUploadMb = parsePositiveInteger(process.env.MAX_UPLOAD_MB, DEFAULT_MAX_UPLOAD_MB);
   const port = parsePositiveInteger(process.env.PORT, 8080);
 
   return {
+    allowedOrigins: parseAllowedOrigins(process.env.ALLOWED_ORIGINS),
     clipdropApiKey: process.env.CLIPDROP_API_KEY,
     cloudinaryApiKey: process.env.CLOUDINARY_API_KEY,
     cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET,

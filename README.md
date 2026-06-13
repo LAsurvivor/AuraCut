@@ -78,6 +78,8 @@ Optional:
 ```txt
 MAX_UPLOAD_MB=10
 PORT=8090
+ALLOWED_ORIGINS=https://lasurvivor.github.io
+NEXT_PUBLIC_API_BASE_URL=https://auracut-ai-background-remover.onrender.com
 ```
 
 ## Local Development

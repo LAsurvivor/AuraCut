@@ -27,6 +27,7 @@ type ApiErrorResponse = {
 };
 
 const MAX_REQUEST_ATTEMPTS = 3;
+const PRODUCTION_API_BASE_URL = "https://auracut-ai-background-remover.onrender.com";
 
 function getApiBaseUrl(): string {
   const explicitBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "");
@@ -35,12 +36,22 @@ function getApiBaseUrl(): string {
     return explicitBaseUrl;
   }
 
-  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    const isLocalHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (typeof window === "undefined") {
+    return "";
+  }
 
-    if (isLocalHost && window.location.port === "8090") {
-      return "http://127.0.0.1:8091";
-    }
+  const isLocalHost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+
+  if (process.env.NODE_ENV === "development" && isLocalHost && window.location.port === "8090") {
+    return "http://127.0.0.1:8091";
+  }
+
+  if (isLocalHost || window.location.hostname.includes("onrender.com")) {
+    return "";
+  }
+
+  if (window.location.hostname === "lasurvivor.github.io") {
+    return PRODUCTION_API_BASE_URL;
   }
 
   return "";
