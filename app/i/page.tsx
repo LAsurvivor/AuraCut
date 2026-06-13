@@ -2,21 +2,29 @@
 
 import { AlertTriangle, ArrowLeft, Download, Image as ImageIcon, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { deleteStoredImage, getStoredImage } from "@/lib/client-image-store";
 
 type ViewerState = "loading" | "ready" | "missing" | "error";
 
+function readImageIdFromUrl(): string | null {
+  const imageId = new URLSearchParams(window.location.search).get("id");
+
+  return imageId?.trim() || null;
+}
+
 export default function SharedImagePage() {
-  const params = useParams<{ id: string }>();
-  const imageId = params.id;
   const [downloadName, setDownloadName] = useState("auracut.png");
+  const [imageId, setImageId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [state, setState] = useState<ViewerState>("loading");
 
   async function deleteImage(): Promise<void> {
+    if (!imageId) {
+      return;
+    }
+
     await deleteStoredImage(imageId);
 
     if (imageUrl) {
@@ -30,10 +38,18 @@ export default function SharedImagePage() {
   useEffect(() => {
     let objectUrl: string | null = null;
     let isActive = true;
+    const nextImageId = readImageIdFromUrl();
+
+    setImageId(nextImageId);
 
     async function loadStoredImage(): Promise<void> {
+      if (!nextImageId) {
+        setState("missing");
+        return;
+      }
+
       try {
-        const record = await getStoredImage(imageId);
+        const record = await getStoredImage(nextImageId);
 
         if (!isActive) {
           return;
@@ -63,7 +79,7 @@ export default function SharedImagePage() {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [imageId]);
+  }, []);
 
   return (
     <main className="relative isolate flex min-h-screen flex-col overflow-hidden px-4 py-5 text-white sm:px-6 lg:px-8">

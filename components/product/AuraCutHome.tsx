@@ -3,11 +3,12 @@ import { Sparkles } from "lucide-react";
 import { Aurora } from "./Aurora";
 import { BorderGlow } from "./BorderGlow";
 import { TransformationCard } from "./TransformationCard";
+import { withBasePath } from "@/lib/paths";
 
 const DEMO_IMAGE =
-  "/images/aura-hero-demo.jpg";
+  withBasePath("/images/aura-hero-demo.jpg");
 const DEMO_CUTOUT_IMAGE =
-  "/images/aura-hero-demo-cutout.png";
+  withBasePath("/images/aura-hero-demo-cutout.png");
 
 function HeroRemovalDemo() {
   return (

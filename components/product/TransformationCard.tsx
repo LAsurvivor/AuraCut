@@ -5,6 +5,7 @@ import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload }
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { deleteStoredImage, saveImageFromUrl } from "@/lib/client-image-store";
+import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
@@ -22,23 +23,23 @@ const MAX_UPLOAD_MB = 10;
 const PRESET_IMAGES: PresetImage[] = [
   {
     name: "Cavapoo",
-    processedUrl: "/images/presets/cavapoo-after-flipped.png",
-    url: "/images/presets/cavapoo-before.avif"
+    processedUrl: withBasePath("/images/presets/cavapoo-after-flipped.png"),
+    url: withBasePath("/images/presets/cavapoo-before.avif")
   },
   {
     name: "Portrait",
-    processedUrl: "/images/presets/boy-after-flipped.png",
-    url: "/images/presets/boy-before.avif"
+    processedUrl: withBasePath("/images/presets/boy-after-flipped.png"),
+    url: withBasePath("/images/presets/boy-before.avif")
   },
   {
     name: "Ferrari",
-    processedUrl: "/images/presets/ferrari-after-flipped.png",
-    url: "/images/presets/ferrari-before.jpg"
+    processedUrl: withBasePath("/images/presets/ferrari-after-flipped.png"),
+    url: withBasePath("/images/presets/ferrari-before.jpg")
   },
   {
     name: "Earrings",
-    processedUrl: "/images/presets/earrings-after-flipped.png",
-    url: "/images/presets/earrings-before.jpeg"
+    processedUrl: withBasePath("/images/presets/earrings-after-flipped.png"),
+    url: withBasePath("/images/presets/earrings-before.jpeg")
   }
 ];
 
@@ -356,7 +357,7 @@ export function TransformationCard() {
       : createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
     const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
     const nextShareId = crypto.randomUUID().slice(0, 12);
-    const nextShareUrl = `${window.location.origin}/i/${nextShareId}`;
+    const nextShareUrl = createShareUrl(nextShareId);
 
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
