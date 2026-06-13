@@ -12,11 +12,21 @@
 
 html {
   scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
   overflow-x: hidden;
   background: linear-gradient(180deg, #070a16 0%, #02030a 56%, #05020d 100%);
   color: #f8fafc;

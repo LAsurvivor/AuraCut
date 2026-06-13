@@ -1,13 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Download, Eye, Link2, Trash2, Upload, X } from "lucide-react";
+import { Check, Download, Eye, Link2, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
-type ToastKind = "copied" | "downloaded" | "deleted" | null;
+type ToastKind = "copied" | "downloaded" | "deleted" | "kept" | null;
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
@@ -150,42 +150,82 @@ function validateFile(file: File): string | undefined {
   return undefined;
 }
 
+async function copyTextToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.setAttribute("readonly", "");
+    textArea.style.position = "fixed";
+    textArea.style.left = "-9999px";
+    textArea.style.top = "0";
+    document.body.appendChild(textArea);
+    textArea.select();
+
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textArea);
+
+    if (!copied) {
+      throw new Error("Could not copy URL.");
+    }
+  }
+}
+
 export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLLabelElement>(null);
+  const hostedBlobUrlsRef = useRef<Set<string>>(new Set());
+  const validShareUrlsRef = useRef<Set<string>>(new Set());
   const [state, setState] = useState<CardState>("idle");
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
-  const [shareUrl, setShareUrl] = useState("https://auracut.app/i/mock-clean-cut.png");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastKind>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
 
+  function revokeIfDisposable(url: string | null): void {
+    if (!url || hostedBlobUrlsRef.current.has(url)) {
+      return;
+    }
+
+    revokeBlobUrl(url);
+  }
+
   useEffect(() => {
     return () => {
-      revokeBlobUrl(previewUrl);
+      revokeIfDisposable(previewUrl);
     };
   }, [previewUrl]);
 
   useEffect(() => {
     return () => {
-      if (resultUrl !== previewUrl) {
+      if (resultUrl !== previewUrl && !hostedBlobUrlsRef.current.has(resultUrl ?? "")) {
         revokeBlobUrl(resultUrl);
       }
     };
   }, [previewUrl, resultUrl]);
 
-  function reset() {
-    revokeBlobUrl(previewUrl);
+  useEffect(() => {
+    const hostedBlobUrls = hostedBlobUrlsRef.current;
 
-    if (resultUrl !== previewUrl) {
-      revokeBlobUrl(resultUrl);
-    }
+    return () => {
+      hostedBlobUrls.forEach((url) => revokeBlobUrl(url));
+      hostedBlobUrls.clear();
+    };
+  }, []);
+
+  function clearWorkspace(): void {
+    revokeIfDisposable(previewUrl);
 
     setState("idle");
     setPreviewUrl(null);
     setResultUrl(null);
+    setShareUrl(null);
     setError(null);
     setToast(null);
     setShowOriginal(false);
@@ -199,18 +239,72 @@ export function TransformationCard() {
     window.setTimeout(() => setToast(null), 1500);
   }
 
+  function centerCanvasInViewport(): void {
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function getCanvasCenterTop(): number | null {
+      const canvas = canvasRef.current;
+
+      if (!canvas) {
+        return null;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+
+      return Math.max(0, window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2);
+    }
+
+    function scrollToCanvasCenter(behavior: ScrollBehavior): void {
+      const nextTop = getCanvasCenterTop();
+
+      if (nextTop === null) {
+        return;
+      }
+
+      window.scrollTo({ behavior, top: nextTop });
+    }
+
+    function snapCanvasToCenter(): void {
+      const nextTop = getCanvasCenterTop();
+
+      if (nextTop !== null) {
+        window.scrollTo(0, nextTop);
+      }
+    }
+
+    requestAnimationFrame(() => {
+      canvasRef.current?.scrollIntoView({
+        behavior: prefersReducedMotion ? "auto" : "smooth",
+        block: "center",
+        inline: "nearest"
+      });
+      scrollToCanvasCenter(prefersReducedMotion ? "auto" : "smooth");
+      window.setTimeout(snapCanvasToCenter, 180);
+      window.setTimeout(snapCanvasToCenter, 420);
+      window.setTimeout(snapCanvasToCenter, 760);
+    });
+  }
+
   async function simulateProcessing(nextPreviewUrl: string): Promise<void> {
     setState("processing");
+    centerCanvasInViewport();
     const processedPromise = createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
     const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
+    const nextShareUrl = `https://auracut.app/i/${crypto.randomUUID().slice(0, 8)}.png`;
+
+    if (processedUrl.startsWith("blob:")) {
+      hostedBlobUrlsRef.current.add(processedUrl);
+    }
+
     setResultUrl((currentResultUrl) => {
-      if (currentResultUrl !== nextPreviewUrl) {
+      if (currentResultUrl !== nextPreviewUrl && !hostedBlobUrlsRef.current.has(currentResultUrl ?? "")) {
         revokeBlobUrl(currentResultUrl);
       }
 
       return processedUrl;
     });
-    setShareUrl(`https://auracut.app/i/${crypto.randomUUID().slice(0, 8)}.png`);
+    setShareUrl(nextShareUrl);
+    validShareUrlsRef.current.add(nextShareUrl);
     setState("result");
   }
 
@@ -222,15 +316,12 @@ export function TransformationCard() {
       return;
     }
 
-    revokeBlobUrl(previewUrl);
-
-    if (resultUrl !== previewUrl) {
-      revokeBlobUrl(resultUrl);
-    }
+    revokeIfDisposable(previewUrl);
 
     const nextPreviewUrl = URL.createObjectURL(file);
     setPreviewUrl(nextPreviewUrl);
     setResultUrl(null);
+    setShareUrl(null);
     setError(null);
     setShowOriginal(false);
     await simulateProcessing(nextPreviewUrl);
@@ -246,24 +337,39 @@ export function TransformationCard() {
   }
 
   async function copyUrl() {
-    await navigator.clipboard.writeText(shareUrl);
+    if (!shareUrl) {
+      return;
+    }
+
+    await copyTextToClipboard(shareUrl);
     showToast("copied");
   }
 
   function deleteImage(): void {
-    reset();
-    showToast("deleted");
-  }
+    if (shareUrl) {
+      validShareUrlsRef.current.delete(shareUrl);
+    }
 
-  async function startPreset(url: string): Promise<void> {
-    revokeBlobUrl(previewUrl);
-
-    if (resultUrl !== previewUrl) {
+    if (resultUrl) {
+      hostedBlobUrlsRef.current.delete(resultUrl);
       revokeBlobUrl(resultUrl);
     }
 
+    clearWorkspace();
+    showToast("deleted");
+  }
+
+  function startAgain(): void {
+    clearWorkspace();
+    showToast("kept");
+  }
+
+  async function startPreset(url: string): Promise<void> {
+    revokeIfDisposable(previewUrl);
+
     setPreviewUrl(url);
     setResultUrl(null);
+    setShareUrl(null);
     setError(null);
     setShowOriginal(false);
     await simulateProcessing(url);
@@ -272,7 +378,7 @@ export function TransformationCard() {
   return (
     <motion.section
       id="studio"
-      className={`tool-shell mx-auto w-full px-4 pb-44 sm:px-6 lg:px-8 ${isCanvasExpanded ? "tool-shell-expanded" : ""}`}
+      className={`tool-shell mx-auto w-full px-4 pb-36 sm:px-6 sm:pb-40 lg:px-8 lg:pb-44 ${isCanvasExpanded ? "tool-shell-expanded" : ""}`}
       initial={{ opacity: 0, y: 28 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
@@ -280,6 +386,7 @@ export function TransformationCard() {
     >
       <div className="tool-stage">
         <label
+          ref={canvasRef}
           className={`cinema-panel tool-canvas relative flex origin-bottom cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             isDragging
               ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
@@ -293,7 +400,10 @@ export function TransformationCard() {
             event.preventDefault();
             setIsDragging(true);
           }}
-          onDragOver={(event) => event.preventDefault()}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
+          }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
         >
@@ -325,11 +435,11 @@ export function TransformationCard() {
               <Upload className="h-4 w-4" aria-hidden="true" />
               Upload Image
             </motion.span>
-            <p className="relative mt-4 text-sm text-white/44">or upload from URL</p>
+            <p className="relative mt-4 text-sm text-white/44">or drop an image here.</p>
           </div>
         ) : null}
 
-          {previewUrl && state !== "idle" ? (
+          {previewUrl && state === "result" ? (
             <img
               src={previewUrl}
               alt="Uploaded image"
@@ -339,7 +449,7 @@ export function TransformationCard() {
             />
           ) : null}
 
-          {state === "processing" && previewUrl ? <ProcessingAnimation imageUrl={previewUrl} /> : null}
+          {state === "processing" ? <ProcessingAnimation /> : null}
 
           {state === "result" && resultUrl ? (
             <motion.div
@@ -412,7 +522,7 @@ export function TransformationCard() {
 
       {resultUrl ? (
         <motion.div
-          className="mt-4 flex justify-center"
+          className="mt-4 flex flex-col items-center gap-3"
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: "easeOut" }}
@@ -437,7 +547,7 @@ export function TransformationCard() {
               }}
               onKeyUp={() => setShowOriginal(false)}
               onBlur={() => setShowOriginal(false)}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Hold to compare"
               aria-label="Hold to compare"
             >
@@ -447,7 +557,7 @@ export function TransformationCard() {
             <button
               type="button"
               onClick={() => void copyUrl()}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Copy URL"
               aria-label="Copy URL"
             >
@@ -467,8 +577,18 @@ export function TransformationCard() {
             </a>
             <button
               type="button"
+              onClick={startAgain}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+              title="Again"
+              aria-label="Generate again"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
+            </button>
+            <button
+              type="button"
               onClick={deleteImage}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-rose-200/30 hover:bg-rose-300/12 hover:text-rose-50"
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Delete"
               aria-label="Delete image"
             >
@@ -481,13 +601,19 @@ export function TransformationCard() {
 
       {toast ? (
         <motion.div
-          className="fixed bottom-5 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-slate-950/90 px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_60px_rgba(2,6,23,0.42),0_0_32px_rgba(34,211,238,0.12)] backdrop-blur-xl"
+          className="fixed bottom-6 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-100/20 bg-slate-950/92 px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_60px_rgba(2,6,23,0.42),0_0_38px_rgba(34,211,238,0.2)] backdrop-blur-xl"
           initial={{ opacity: 0, y: 12, x: "-50%" }}
           animate={{ opacity: 1, y: 0, x: "-50%" }}
           exit={{ opacity: 0, y: 12, x: "-50%" }}
         >
           <Check className="h-4 w-4 text-cyan-100" aria-hidden="true" />
-          {toast === "copied" ? "URL copied" : toast === "deleted" ? "Image deleted" : "Download started"}
+          {toast === "copied"
+            ? "URL copied"
+            : toast === "deleted"
+              ? "URL invalidated"
+            : toast === "kept"
+              ? "Previous URL kept active"
+              : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>
