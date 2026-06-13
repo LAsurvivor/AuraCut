@@ -443,7 +443,7 @@ export function TransformationCard() {
             <img
               src={previewUrl}
               alt="Uploaded image"
-              className={`image-contain absolute inset-0 p-5 transition duration-300 ${
+              className={`image-contain absolute inset-0 transition duration-300 ${
                 state === "result" && resultUrl && !showOriginal ? "opacity-0" : "opacity-100"
               }`}
             />
@@ -463,7 +463,7 @@ export function TransformationCard() {
                   key="original"
                   src={previewUrl}
                   alt="Original image"
-                  className="image-contain p-5"
+                  className="image-contain"
                   initial={{ opacity: 0, scale: 0.99 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.16 }}
@@ -473,7 +473,7 @@ export function TransformationCard() {
                   key="processed"
                   src={resultUrl}
                   alt="Processed image"
-                  className="image-contain p-5"
+                  className="image-contain"
                   initial={{ opacity: 0, scale: 0.98 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.35, delay: 0.05 }}

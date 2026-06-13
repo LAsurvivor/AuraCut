@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useMemo, useRef } from "react";
 
-const statuses = ["Analyze", "Cut", "Flip", "Host"];
 const rows = 21;
 const columns = 33;
 const tau = Math.PI * 2;
@@ -172,18 +171,6 @@ export function ProcessingAnimation() {
       />
 
       <DotFieldCanvas dots={dots} />
-
-      <div className="absolute bottom-5 left-1/2 h-8 min-w-24 -translate-x-1/2 overflow-hidden rounded-full border border-white/10 bg-slate-950/68 px-4 text-xs font-semibold uppercase tracking-normal text-cyan-50/86 shadow-[0_18px_60px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-        {statuses.map((status, index) => (
-          <span
-            key={status}
-            className="processing-status-word absolute inset-0 flex items-center justify-center"
-            style={{ animationDelay: `${index * 0.68}s` }}
-          >
-            {status}
-          </span>
-        ))}
-      </div>
     </motion.div>
   );
 }

@@ -193,6 +193,7 @@ a {
 }
 
 .image-contain {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -226,12 +227,6 @@ a {
 .processing-dot-canvas {
   display: block;
   opacity: 0.98;
-}
-
-.processing-status-word {
-  opacity: 0;
-  animation: processing-status-cycle 2.72s ease-in-out infinite both;
-  transform: translate3d(0, 5px, 0);
 }
 
 .border-glow-card {
@@ -413,19 +408,6 @@ a {
       24px 36px,
       36px 12px,
       12px 24px;
-  }
-}
-
-@keyframes processing-status-cycle {
-  0%,
-  18% {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-  28%,
-  100% {
-    opacity: 0;
-    transform: translate3d(0, -5px, 0);
   }
 }
 
