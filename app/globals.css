@@ -217,6 +217,23 @@ a {
   height: 100%;
 }
 
+.processing-gradient {
+  background:
+    linear-gradient(145deg, rgba(12, 18, 36, 0.98), rgba(2, 6, 23, 0.98) 58%, rgba(7, 12, 28, 0.98)),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.08), transparent 36%, rgba(168, 85, 247, 0.08) 72%, transparent);
+}
+
+.processing-dot-canvas {
+  display: block;
+  opacity: 0.98;
+}
+
+.processing-status-word {
+  opacity: 0;
+  animation: processing-status-cycle 2.72s ease-in-out infinite both;
+  transform: translate3d(0, 5px, 0);
+}
+
 .border-glow-card {
   --edge-proximity: 0;
   --cursor-angle: 45deg;
@@ -396,6 +413,19 @@ a {
       24px 36px,
       36px 12px,
       12px 24px;
+  }
+}
+
+@keyframes processing-status-cycle {
+  0%,
+  18% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  28%,
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -5px, 0);
   }
 }
 
