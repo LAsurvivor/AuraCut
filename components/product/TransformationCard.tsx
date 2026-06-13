@@ -1,19 +1,17 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, Download, Eye, Link2, RefreshCw, Upload, X } from "lucide-react";
+import { Check, Download, Eye, Link2, Trash2, Upload, X } from "lucide-react";
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
-type CardState = "idle" | "uploaded" | "processing" | "result" | "error";
-type ToastKind = "copied" | "downloaded" | null;
+type CardState = "idle" | "processing" | "result" | "error";
+type ToastKind = "copied" | "downloaded" | "deleted" | null;
 
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const ACCEPTED_INPUT = "image/png,image/jpeg,image/webp,.jpg,.jpeg";
 const MAX_UPLOAD_MB = 10;
-const MOCK_IMAGE =
-  "https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?auto=format&fit=crop&w=1200&q=88";
 const PRESET_IMAGES = [
   {
     name: "Portrait",
@@ -162,6 +160,7 @@ export function TransformationCard() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastKind>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
 
   useEffect(() => {
     return () => {
@@ -202,8 +201,8 @@ export function TransformationCard() {
 
   async function simulateProcessing(nextPreviewUrl: string): Promise<void> {
     setState("processing");
-    await new Promise((resolve) => window.setTimeout(resolve, 3350));
-    const processedUrl = await createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
+    const processedPromise = createMockProcessedPng(nextPreviewUrl).catch(() => nextPreviewUrl);
+    const [, processedUrl] = await Promise.all([new Promise((resolve) => window.setTimeout(resolve, 3350)), processedPromise]);
     setResultUrl((currentResultUrl) => {
       if (currentResultUrl !== nextPreviewUrl) {
         revokeBlobUrl(currentResultUrl);
@@ -251,50 +250,9 @@ export function TransformationCard() {
     showToast("copied");
   }
 
-  async function startMockUploaded(): Promise<void> {
-    revokeBlobUrl(previewUrl);
-
-    if (resultUrl !== previewUrl) {
-      revokeBlobUrl(resultUrl);
-    }
-
-    setPreviewUrl(MOCK_IMAGE);
-    setResultUrl(null);
-    setState("uploaded");
-    setError(null);
-    setShowOriginal(false);
-  }
-
-  async function startMockProcessing(): Promise<void> {
-    const source = previewUrl ?? MOCK_IMAGE;
-    setPreviewUrl(source);
-    await simulateProcessing(source);
-  }
-
-  async function startMockResult(): Promise<void> {
-    const source = previewUrl ?? MOCK_IMAGE;
-    setPreviewUrl(source);
-    setResultUrl((currentResultUrl) => {
-      if (currentResultUrl !== previewUrl && currentResultUrl !== source) {
-        revokeBlobUrl(currentResultUrl);
-      }
-
-      return null;
-    });
-    setShareUrl("https://auracut.app/i/demo-result.png");
-    setShowOriginal(false);
-    setError(null);
-    setState("processing");
-
-    const processedUrl = await createMockProcessedPng(source).catch(() => source);
-    setResultUrl((currentResultUrl) => {
-      if (currentResultUrl !== previewUrl && currentResultUrl !== source) {
-        revokeBlobUrl(currentResultUrl);
-      }
-
-      return processedUrl;
-    });
-    setState("result");
+  function deleteImage(): void {
+    reset();
+    showToast("deleted");
   }
 
   async function startPreset(url: string): Promise<void> {
@@ -314,42 +272,43 @@ export function TransformationCard() {
   return (
     <motion.section
       id="studio"
-      className="mx-auto w-full max-w-4xl px-4 pb-24 sm:px-6 lg:px-8"
+      className={`tool-shell mx-auto w-full px-4 pb-44 sm:px-6 lg:px-8 ${isCanvasExpanded ? "tool-shell-expanded" : ""}`}
       initial={{ opacity: 0, y: 28 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.2 }}
       transition={{ duration: 0.55, ease: "easeOut" }}
     >
-      <label
-        className={`cinema-panel relative flex min-h-[300px] cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition duration-500 sm:min-h-[430px] ${
-          isDragging
-            ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
+      <div className="tool-stage">
+        <label
+          className={`cinema-panel tool-canvas relative flex origin-bottom cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isDragging
+              ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
             : state === "processing"
-              ? "border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
+                ? "tool-canvas-expanded border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
             : state === "idle"
-              ? "border-dashed border-white/14 bg-white/[0.035] hover:border-cyan-200/34 hover:bg-white/[0.055] hover:shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_26px_100px_rgba(59,130,246,0.16)]"
-              : "border-white/12 bg-slate-950/78"
-        }`}
-        onDragEnter={(event) => {
-          event.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragOver={(event) => event.preventDefault()}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept={ACCEPTED_INPUT}
-          className="sr-only"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) {
-              void handleFile(file);
-            }
+                ? "border-dashed border-white/14 bg-white/[0.035] hover:border-cyan-200/34 hover:bg-white/[0.055] hover:shadow-[0_0_0_1px_rgba(34,211,238,0.14),0_26px_100px_rgba(59,130,246,0.16)]"
+                : "tool-canvas-expanded border-white/12 bg-slate-950/78"
+          }`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setIsDragging(true);
           }}
-        />
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED_INPUT}
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                void handleFile(file);
+              }
+            }}
+          />
 
         {state === "idle" ? (
           <div className="relative flex flex-col items-center px-6 text-center">
@@ -382,13 +341,6 @@ export function TransformationCard() {
 
           {state === "processing" && previewUrl ? <ProcessingAnimation imageUrl={previewUrl} /> : null}
 
-          {state === "uploaded" ? (
-            <span className="absolute left-4 top-4 inline-flex min-h-9 items-center gap-2 rounded-full border border-white/12 bg-slate-950/54 px-3 text-xs font-semibold text-white/72 shadow-[0_16px_44px_rgba(2,6,23,0.24)] backdrop-blur-xl">
-              <Upload className="h-3.5 w-3.5 text-cyan-100" aria-hidden="true" />
-              Image
-            </span>
-          ) : null}
-
           {state === "result" && resultUrl ? (
             <motion.div
               className={`absolute inset-0 flex items-center justify-center ${showOriginal ? "bg-slate-950" : "checkerboard-dark checkerboard-animated"}`}
@@ -417,10 +369,6 @@ export function TransformationCard() {
                   transition={{ duration: 0.35, delay: 0.05 }}
                 />
               )}
-              <span className="absolute left-4 top-4 inline-flex min-h-9 items-center gap-2 rounded-full border border-white/12 bg-slate-950/58 px-3 text-xs font-semibold text-white/76 shadow-[0_16px_44px_rgba(2,6,23,0.24)] backdrop-blur-xl">
-                <Check className={`h-3.5 w-3.5 ${showOriginal ? "text-cyan-100" : "text-emerald-200"}`} aria-hidden="true" />
-                {showOriginal ? "Original" : "Ready"}
-              </span>
             </motion.div>
           ) : null}
 
@@ -433,10 +381,14 @@ export function TransformationCard() {
               <p className="mt-2 text-sm leading-6 text-white/52">{error}</p>
             </div>
           ) : null}
-      </label>
+        </label>
 
-      {state === "idle" ? (
-        <div className="mt-5 flex flex-col items-center gap-3 text-center">
+        <div
+          className={`preset-tray flex flex-col items-center gap-3 text-center ${
+            state === "idle" ? "opacity-100" : "preset-tray-hidden"
+          }`}
+          aria-hidden={state !== "idle"}
+        >
           <p className="text-sm text-white/42">
             No image? <span className="text-white/68">Try one.</span>
           </p>
@@ -445,6 +397,7 @@ export function TransformationCard() {
               <button
                 key={preset.name}
                 type="button"
+                disabled={state !== "idle"}
                 onClick={() => void startPreset(preset.url)}
                 className="group h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.05] p-1 transition hover:-translate-y-0.5 hover:border-cyan-100/32 hover:bg-white/[0.08]"
                 title={preset.name}
@@ -455,7 +408,7 @@ export function TransformationCard() {
             ))}
           </div>
         </div>
-      ) : null}
+      </div>
 
       {resultUrl ? (
         <motion.div
@@ -505,7 +458,7 @@ export function TransformationCard() {
               href={resultUrl}
               download
               onClick={() => showToast("downloaded")}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-cyan-100 text-slate-950 shadow-[0_0_34px_rgba(103,232,249,0.24)] transition hover:-translate-y-0.5 hover:bg-white"
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Download"
               aria-label="Download"
             >
@@ -514,32 +467,17 @@ export function TransformationCard() {
             </a>
             <button
               type="button"
-              onClick={reset}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-white/[0.09] hover:text-white"
-              title="Re-upload"
-              aria-label="Re-upload"
+              onClick={deleteImage}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-rose-200/30 hover:bg-rose-300/12 hover:text-rose-50"
+              title="Delete"
+              aria-label="Delete image"
             >
-              <RefreshCw className="h-4 w-4" aria-hidden="true" />
-              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
             </button>
           </div>
         </motion.div>
       ) : null}
-
-      <details className="mx-auto mt-4 w-fit text-xs text-white/28">
-        <summary className="cursor-pointer rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 transition hover:text-white/58">dev</summary>
-        <div className="mt-2 flex flex-wrap justify-center gap-2">
-          <button type="button" onClick={() => void startMockUploaded()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-            uploaded
-          </button>
-          <button type="button" onClick={() => void startMockProcessing()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-            processing
-          </button>
-          <button type="button" onClick={() => void startMockResult()} className="rounded-full bg-white/[0.06] px-2.5 py-1.5 font-semibold text-white/48 transition hover:bg-white/[0.1] hover:text-white/72">
-            result
-          </button>
-        </div>
-      </details>
 
       {toast ? (
         <motion.div
@@ -549,7 +487,7 @@ export function TransformationCard() {
           exit={{ opacity: 0, y: 12, x: "-50%" }}
         >
           <Check className="h-4 w-4 text-cyan-100" aria-hidden="true" />
-          {toast === "copied" ? "URL copied" : "Download started"}
+          {toast === "copied" ? "URL copied" : toast === "deleted" ? "Image deleted" : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>
