@@ -1,0 +1,48 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="18" fill="#050816"/>
+  <rect x="1" y="1" width="62" height="62" rx="17" stroke="url(#border)" stroke-opacity="0.68" stroke-width="2"/>
+  <g filter="url(#aura)">
+    <circle cx="32" cy="33" r="20" fill="url(#glow)" fill-opacity="0.9"/>
+  </g>
+  <path
+    d="M44.7 16.2C38.1 22.1 31 30.7 24.4 44.5"
+    stroke="white"
+    stroke-width="5.8"
+    stroke-linecap="round"
+  />
+  <path
+    d="M44.7 16.2C38.1 22.1 31 30.7 24.4 44.5"
+    stroke="url(#cut)"
+    stroke-width="3.4"
+    stroke-linecap="round"
+  />
+  <path
+    d="M20 18.5L22.3 23.7L27.5 26L22.3 28.3L20 33.5L17.7 28.3L12.5 26L17.7 23.7L20 18.5Z"
+    fill="#E8FCFF"
+  />
+  <path
+    d="M47.8 38.5L49.1 41.4L52 42.7L49.1 44L47.8 46.9L46.5 44L43.6 42.7L46.5 41.4L47.8 38.5Z"
+    fill="#B9A7FF"
+  />
+  <defs>
+    <linearGradient id="border" x1="8" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#67E8F9"/>
+      <stop offset="0.48" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 31) rotate(90) scale(24)">
+      <stop stop-color="#E8FCFF"/>
+      <stop offset="0.4" stop-color="#67E8F9"/>
+      <stop offset="0.78" stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#050816" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cut" x1="44" y1="16" x2="22" y2="46" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="0.45" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <filter id="aura" x="4" y="5" width="56" height="56" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+  </defs>
+</svg>

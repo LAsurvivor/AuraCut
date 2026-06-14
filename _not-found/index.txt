@@ -1,0 +1,19 @@
+1:"$Sreact.fragment"
+2:I[43782,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"AccessGate"]
+3:I[39756,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"default"]
+4:I[37457,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"default"]
+7:I[97367,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"OutletBoundary"]
+8:"$Sreact.suspense"
+b:I[97367,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"ViewportBoundary"]
+d:I[97367,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"MetadataBoundary"]
+f:I[68027,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"default",1]
+:HL["/AuraCut/_next/static/chunks/26hyambe892bl.css","style"]
+0:{"P":null,"c":["","_not-found",""],"q":"","i":false,"f":[[["",{"children":["/_not-found",{"children":["__PAGE__",{}]}]},"$undefined","$undefined",16],[["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/AuraCut/_next/static/chunks/26hyambe892bl.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}],["$","script","script-0",{"src":"/AuraCut/_next/static/chunks/27b9ene80gmny.js","async":true,"nonce":"$undefined"}],["$","script","script-1",{"src":"/AuraCut/_next/static/chunks/14mrh2-p_w84d.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"en","children":["$","body",null,{"children":["$","$L2",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":["$L5",[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]}]}]]}],{"children":[["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],{"children":[["$","$1","c",{"children":["$L6",null,["$","$L7",null,{"children":["$","$8",null,{"name":"Next.MetadataOutlet","children":"$@9"}]}]]}],{},null,false,null]},null,false,"$@a"]},null,false,null],["$","$1","h",{"children":[["$","meta",null,{"name":"robots","content":"noindex"}],["$","$Lb",null,{"children":"$Lc"}],["$","div",null,{"hidden":true,"children":["$","$Ld",null,{"children":["$","$8",null,{"name":"Next.Metadata","children":"$Le"}]}]}],null]}],false]],"m":"$undefined","G":["$f",[["$","link","0",{"rel":"stylesheet","href":"/AuraCut/_next/static/chunks/26hyambe892bl.css","precedence":"next","crossOrigin":"$undefined","nonce":"$undefined"}]]],"S":true,"h":null,"s":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"jqxYw0bfak4AqLydHOdMU"}
+5:E{"digest":"NEXT_REDIRECT;replace;/;307;"}
+6:E{"digest":"NEXT_REDIRECT;replace;/;307;"}
+10:[]
+a:"$W10"
+c:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]
+11:I[27201,["/AuraCut/_next/static/chunks/27b9ene80gmny.js","/AuraCut/_next/static/chunks/14mrh2-p_w84d.js"],"IconMark"]
+9:null
+e:[["$","title","0",{"children":"AuraCut AI Background Remover"}],["$","meta","1",{"name":"description","content":"Remove backgrounds, flip images, and export transparent PNGs with a polished AI workflow."}],["$","link","2",{"rel":"shortcut icon","href":"/AuraCut/favicon.svg"}],["$","link","3",{"rel":"icon","href":"/AuraCut/favicon.svg","type":"image/svg+xml"}],["$","$L11","4",{}]]
