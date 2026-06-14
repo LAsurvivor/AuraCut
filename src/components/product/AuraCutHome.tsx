@@ -34,7 +34,7 @@ export function AuraCutHome() {
         <div className="aurora-fade absolute inset-x-0 top-0 h-[42rem] sm:h-[48rem] lg:h-[54rem]">
           <Aurora colorStops={["#7cff67", "#B497CF", "#5227FF"]} blend={0.5} amplitude={1} speed={0.5} />
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.1),transparent_18rem),radial-gradient(circle_at_18%_58rem,rgba(34,211,238,0.08),transparent_18rem),radial-gradient(circle_at_82%_66rem,rgba(168,85,247,0.08),transparent_20rem),linear-gradient(180deg,rgba(3,7,18,0.04),rgba(3,7,18,0.68)_34rem,rgba(3,7,18,0.9)_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(255,255,255,0.09),transparent_20rem),radial-gradient(circle_at_18%_58rem,rgba(34,211,238,0.07),transparent_22rem),radial-gradient(circle_at_82%_66rem,rgba(168,85,247,0.07),transparent_24rem)]" />
         <div className="noise-overlay absolute inset-0 opacity-[0.34]" />
       </div>
 
