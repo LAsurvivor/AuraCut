@@ -102,6 +102,12 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Could not transform this image.";
 }
 
+function waitForNextFrame(): Promise<void> {
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+const COMPLETE_PROGRESS_HOLD_MS = 420;
+
 export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLLabelElement>(null);
@@ -124,6 +130,7 @@ export function TransformationCard() {
   const [showResultActions, setShowResultActions] = useState(false);
   const canUpload = state === "idle";
   const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
+  const processingProgressRef = useRef(0);
   const processingTargetRef = useRef(0);
 
   function revokeIfDisposable(url: string | null): void {
@@ -166,6 +173,10 @@ export function TransformationCard() {
   }, [processingTargetProgress]);
 
   useEffect(() => {
+    processingProgressRef.current = processingProgress;
+  }, [processingProgress]);
+
+  useEffect(() => {
     if (state !== "processing") {
       return;
     }
@@ -188,13 +199,17 @@ export function TransformationCard() {
           }
 
           lastSlowAdvanceAt = now;
-          return Math.min(99, current + 1);
+          const nextProgress = Math.min(99, current + 1);
+          processingProgressRef.current = nextProgress;
+          return nextProgress;
         }
 
         const distance = target - current;
         const step = Math.max(0.28, distance * 0.075);
 
-        return Math.min(target, current + step);
+        const nextProgress = Math.min(target, current + step);
+        processingProgressRef.current = nextProgress;
+        return nextProgress;
       });
 
       animationFrame = window.requestAnimationFrame(tick);
@@ -231,6 +246,7 @@ export function TransformationCard() {
     setError(null);
     setToast(null);
     setShowOriginal(false);
+    processingProgressRef.current = 0;
     setProcessingProgress(0);
     processingTargetRef.current = 0;
     setProcessingTargetProgress(0);
@@ -300,6 +316,7 @@ export function TransformationCard() {
   }
 
   function prepareProcessingState(): void {
+    processingProgressRef.current = 0;
     setProcessingProgress(0);
     processingTargetRef.current = 0;
     setProcessingTargetProgress(0);
@@ -324,9 +341,47 @@ export function TransformationCard() {
     setProcessingTargetProgress(nextProgress);
   }
 
-  function revealResult(processedUrl: string, nextPreviewUrl: string): void {
+  async function finishProgressBeforeReveal(workflowId: number): Promise<void> {
+    advanceProcessingTarget(100);
+
+    while (isCurrentWorkflow(workflowId)) {
+      const current = processingProgressRef.current;
+
+      if (current >= 100) {
+        break;
+      }
+
+      const distance = 100 - current;
+      const step = Math.max(1.4, distance * 0.18);
+      const nextProgress = Math.min(100, current + step);
+      processingProgressRef.current = nextProgress;
+      setProcessingProgress(nextProgress);
+
+      await waitForNextFrame();
+    }
+
+    if (!isCurrentWorkflow(workflowId)) {
+      return;
+    }
+
+    processingProgressRef.current = 100;
+    setProcessingProgress(100);
+    await waitForNextFrame();
+
+    if (isCurrentWorkflow(workflowId)) {
+      await wait(COMPLETE_PROGRESS_HOLD_MS);
+    }
+  }
+
+  async function revealResult(processedUrl: string, nextPreviewUrl: string, workflowId: number): Promise<void> {
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
+    }
+
+    await finishProgressBeforeReveal(workflowId);
+
+    if (!isCurrentWorkflow(workflowId)) {
+      return;
     }
 
     setResultUrl((currentResultUrl) => {
@@ -336,8 +391,7 @@ export function TransformationCard() {
 
       return processedUrl;
     });
-    processingTargetRef.current = 100;
-    setProcessingTargetProgress(100);
+    processingProgressRef.current = 100;
     setProcessingProgress(100);
     setShowCompleteTick(true);
     setShowResultActions(false);
@@ -375,13 +429,14 @@ export function TransformationCard() {
       setShareId(image.id);
       setShareUrl(nextShareUrl);
       setDeleteToken(image.deleteToken ?? null);
-      revealResult(image.processedUrl, nextPreviewUrl);
+      await revealResult(image.processedUrl, nextPreviewUrl, workflowId);
     } catch (error) {
       if (!isCurrentWorkflow(workflowId)) {
         return;
       }
 
       setError(getErrorMessage(error));
+      processingProgressRef.current = 0;
       setProcessingProgress(0);
       processingTargetRef.current = 0;
       setProcessingTargetProgress(0);
@@ -457,7 +512,7 @@ export function TransformationCard() {
         return;
       }
 
-      revealResult(preset.processedUrl as string, nextPreviewUrl);
+      await revealResult(preset.processedUrl as string, nextPreviewUrl, workflowId);
       void hostingPromise;
     } catch (error) {
       if (!isCurrentWorkflow(workflowId)) {
@@ -465,6 +520,7 @@ export function TransformationCard() {
       }
 
       setError(getErrorMessage(error));
+      processingProgressRef.current = 0;
       setProcessingProgress(0);
       processingTargetRef.current = 0;
       setProcessingTargetProgress(0);
@@ -497,6 +553,7 @@ export function TransformationCard() {
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
+    processingProgressRef.current = 0;
     setProcessingProgress(0);
     processingTargetRef.current = 0;
     setProcessingTargetProgress(0);
@@ -584,6 +641,7 @@ export function TransformationCard() {
     setShareUrl(null);
     setError(null);
     setShowOriginal(false);
+    processingProgressRef.current = 0;
     setProcessingProgress(0);
     processingTargetRef.current = 0;
     setProcessingTargetProgress(0);
