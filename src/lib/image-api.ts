@@ -68,6 +68,7 @@ class ApiRequestError extends Error {
 }
 
 const MAX_REQUEST_ATTEMPTS = 3;
+const IMAGE_JOB_TIMEOUT_MS = 135 * 1000;
 const PRODUCTION_API_BASE_URL = "https://auracut-ai-background-remover.onrender.com";
 
 function getApiBaseUrl(): string {
@@ -277,7 +278,7 @@ function subscribeToImageJob(
 
     const timeout = window.setTimeout(() => {
       finish(() => reject(new Error("Image processing timed out. Try again.")));
-    }, 45000);
+    }, IMAGE_JOB_TIMEOUT_MS);
 
     function finish(callback: () => void): void {
       if (settled) {

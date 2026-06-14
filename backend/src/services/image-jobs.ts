@@ -61,13 +61,17 @@ type ImageJob = ImageJobSnapshot & {
 };
 
 const JOB_TTL_MS = 30 * 60 * 1000;
-const JOB_TIMEOUT_MS = 30 * 1000;
+const BASE_JOB_TIMEOUT_MS = 45 * 1000;
+const MAX_JOB_TIMEOUT_MS = 120 * 1000;
+const TIMEOUT_MS_PER_UPLOAD_MB = 6 * 1000;
+const BYTES_PER_MB = 1024 * 1024;
 const jobs = new Map<string, ImageJob>();
 
 export function createUploadedImageJob(upload: ValidatedImageUpload, config: AppConfig): ImageJobSnapshot {
   cleanupExpiredJobs();
 
   const now = new Date().toISOString();
+  const timeoutMs = getJobTimeoutMs(upload.sizeBytes);
   const job = {
     createdAt: now,
     id: randomUUID(),
@@ -76,7 +80,7 @@ export function createUploadedImageJob(upload: ValidatedImageUpload, config: App
     subscribers: new Set(),
     timeout: setTimeout(() => {
       failJob(job, new HttpError(504, "image_job_timeout", "Image processing timed out. Try again."));
-    }, JOB_TIMEOUT_MS),
+    }, timeoutMs),
     updatedAt: now
   } satisfies ImageJob;
 
@@ -84,6 +88,12 @@ export function createUploadedImageJob(upload: ValidatedImageUpload, config: App
   void processUploadedImageJob(job, upload, config);
 
   return snapshotJob(job);
+}
+
+function getJobTimeoutMs(sizeBytes: number): number {
+  const uploadMegabytes = Math.ceil(sizeBytes / BYTES_PER_MB);
+
+  return Math.min(MAX_JOB_TIMEOUT_MS, BASE_JOB_TIMEOUT_MS + uploadMegabytes * TIMEOUT_MS_PER_UPLOAD_MB);
 }
 
 export function getImageJob(jobId: string): ImageJobSnapshot | undefined {
