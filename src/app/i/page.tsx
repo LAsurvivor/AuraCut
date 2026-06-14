@@ -206,7 +206,7 @@ export default function SharedImagePage() {
               </span>
               <h1 className="text-xl font-semibold text-white">Image unavailable</h1>
               <p className="mt-2 text-sm leading-6 text-white/52">
-                This image was deleted or is not saved in this browser.
+                This image was deleted, expired, or is not saved in this browser.
               </p>
             </div>
           ) : null}

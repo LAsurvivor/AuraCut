@@ -12,6 +12,8 @@ export type ErrorCode =
   | "internal_error"
   | "invalid_delete_token"
   | "invalid_image_id"
+  | "invalid_job_id"
+  | "job_not_found"
   | "missing_delete_token"
   | "missing_file"
   | "not_found"

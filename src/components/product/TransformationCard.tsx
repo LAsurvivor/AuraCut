@@ -6,7 +6,7 @@ import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { markStoredImageDeleted, saveHostedImageRecord } from "@/lib/client-image-store";
 import { downloadImageFile } from "@/lib/download-image";
-import { deleteHostedImage, transformPresetImage, transformUploadedImage } from "@/lib/image-api";
+import { deleteHostedImage, transformPresetImage, transformUploadedImageWithProgress } from "@/lib/image-api";
 import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
@@ -119,9 +119,11 @@ export function TransformationCard() {
   const [toast, setToast] = useState<ToastKind>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [processingProgress, setProcessingProgress] = useState(0);
+  const [processingTargetProgress, setProcessingTargetProgress] = useState(0);
   const [showCompleteTick, setShowCompleteTick] = useState(false);
   const [showResultActions, setShowResultActions] = useState(false);
   const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
+  const processingTargetRef = useRef(0);
 
   function revokeIfDisposable(url: string | null): void {
     if (!url || hostedBlobUrlsRef.current.has(url)) {
@@ -159,25 +161,29 @@ export function TransformationCard() {
   }, []);
 
   useEffect(() => {
+    processingTargetRef.current = processingTargetProgress;
+  }, [processingTargetProgress]);
+
+  useEffect(() => {
     if (state !== "processing") {
       return;
     }
 
     let animationFrame = 0;
-    let lastProgress = -1;
-    const startedAt = performance.now();
-    const duration = 3350;
 
-    const tick = (time: number) => {
-      const elapsed = Math.max(0, time - startedAt);
-      const rawProgress = Math.min(elapsed / duration, 1);
-      const easedProgress = 1 - Math.pow(1 - rawProgress, 2.45);
-      const nextProgress = Math.min(99, Math.round(easedProgress * 99));
+    const tick = () => {
+      setProcessingProgress((current) => {
+        const target = processingTargetRef.current;
 
-      if (nextProgress !== lastProgress) {
-        lastProgress = nextProgress;
-        setProcessingProgress(nextProgress);
-      }
+        if (current >= target) {
+          return current;
+        }
+
+        const distance = target - current;
+        const step = Math.max(0.28, distance * 0.075);
+
+        return Math.min(target, current + step);
+      });
 
       animationFrame = window.requestAnimationFrame(tick);
     };
@@ -214,6 +220,8 @@ export function TransformationCard() {
     setToast(null);
     setShowOriginal(false);
     setProcessingProgress(0);
+    processingTargetRef.current = 0;
+    setProcessingTargetProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     if (inputRef.current) {
@@ -281,6 +289,8 @@ export function TransformationCard() {
 
   function prepareProcessingState(): void {
     setProcessingProgress(0);
+    processingTargetRef.current = 0;
+    setProcessingTargetProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     setState("processing");
@@ -296,6 +306,12 @@ export function TransformationCard() {
     return workflowIdRef.current === workflowId;
   }
 
+  function advanceProcessingTarget(progress: number): void {
+    const nextProgress = Math.max(processingTargetRef.current, Math.min(100, Math.round(progress)));
+    processingTargetRef.current = nextProgress;
+    setProcessingTargetProgress(nextProgress);
+  }
+
   function revealResult(processedUrl: string, nextPreviewUrl: string): void {
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
@@ -308,6 +324,8 @@ export function TransformationCard() {
 
       return processedUrl;
     });
+    processingTargetRef.current = 100;
+    setProcessingTargetProgress(100);
     setProcessingProgress(100);
     setShowCompleteTick(true);
     setShowResultActions(false);
@@ -317,7 +335,11 @@ export function TransformationCard() {
   async function processUploadedImage(file: File, nextPreviewUrl: string, workflowId: number): Promise<void> {
     try {
       prepareProcessingState();
-      const [image] = await Promise.all([transformUploadedImage(file), wait(1400)]);
+      const image = await transformUploadedImageWithProgress(file, (update) => {
+        if (isCurrentWorkflow(workflowId)) {
+          advanceProcessingTarget(update.progress);
+        }
+      });
 
       if (!isCurrentWorkflow(workflowId)) {
         return;
@@ -349,18 +371,20 @@ export function TransformationCard() {
 
       setError(getErrorMessage(error));
       setProcessingProgress(0);
+      processingTargetRef.current = 0;
+      setProcessingTargetProgress(0);
       setShowCompleteTick(false);
       setShowResultActions(false);
       setState("error");
     }
   }
 
-  async function hostPresetResult(preset: PresetImage, workflowId: number): Promise<void> {
+  async function hostPresetResult(preset: PresetImage, workflowId: number) {
     const image = await transformPresetImage(preset.key);
     const nextShareUrl = createShareUrl(image.id);
 
     if (!isCurrentWorkflow(workflowId)) {
-      return;
+      return null;
     }
 
     await saveHostedImageRecord({
@@ -373,36 +397,48 @@ export function TransformationCard() {
     });
 
     if (!isCurrentWorkflow(workflowId)) {
-      return;
+      return null;
     }
 
-    setShareId(image.id);
-    setShareUrl(nextShareUrl);
-    setDeleteToken(image.deleteToken ?? null);
-    setResultUrl(image.processedUrl);
+    return {
+      deleteToken: image.deleteToken ?? null,
+      image,
+      shareUrl: nextShareUrl
+    };
   }
 
   async function simulatePresetProcessing(nextPreviewUrl: string, preset: PresetImage, workflowId: number): Promise<void> {
     try {
       prepareProcessingState();
-      const hostingPromise = hostPresetResult(preset, workflowId).catch(() => {
-        if (!isCurrentWorkflow(workflowId)) {
-          return;
-        }
+      advanceProcessingTarget(28);
+      const hostingPromise = hostPresetResult(preset, workflowId);
 
-        setShareId(null);
-        setShareUrl(null);
-        setDeleteToken(null);
-      });
+      await wait(420);
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
 
-      await wait(1650);
+      advanceProcessingTarget(62);
+      await wait(520);
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
+      advanceProcessingTarget(86);
+      const [hostedResult] = await Promise.all([hostingPromise, wait(710)]);
 
       if (!isCurrentWorkflow(workflowId)) {
         return;
       }
 
-      revealResult(preset.processedUrl as string, nextPreviewUrl);
-      void hostingPromise;
+      if (!hostedResult) {
+        return;
+      }
+
+      setShareId(hostedResult.image.id);
+      setShareUrl(hostedResult.shareUrl);
+      setDeleteToken(hostedResult.deleteToken);
+      revealResult(hostedResult.image.processedUrl, nextPreviewUrl);
     } catch (error) {
       if (!isCurrentWorkflow(workflowId)) {
         return;
@@ -410,6 +446,8 @@ export function TransformationCard() {
 
       setError(getErrorMessage(error));
       setProcessingProgress(0);
+      processingTargetRef.current = 0;
+      setProcessingTargetProgress(0);
       setShowCompleteTick(false);
       setShowResultActions(false);
       setState("error");
@@ -436,6 +474,8 @@ export function TransformationCard() {
     setError(null);
     setShowOriginal(false);
     setProcessingProgress(0);
+    processingTargetRef.current = 0;
+    setProcessingTargetProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     await processUploadedImage(file, nextPreviewUrl, workflowId);
@@ -512,6 +552,8 @@ export function TransformationCard() {
     setError(null);
     setShowOriginal(false);
     setProcessingProgress(0);
+    processingTargetRef.current = 0;
+    setProcessingTargetProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
     if (!preset.processedUrl) {
@@ -679,7 +721,7 @@ export function TransformationCard() {
             transition={{ duration: 0.24, ease: "easeOut" }}
             aria-live="polite"
           >
-            {processingProgress}%
+            {Math.round(processingProgress)}%
           </motion.div>
         ) : null}
 

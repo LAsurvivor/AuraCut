@@ -7,6 +7,7 @@ import { HttpError } from "../errors/http-error.js";
 import { removeBackground } from "../services/background-removal.js";
 import { createDeleteToken, verifyDeleteToken } from "../services/delete-token.js";
 import { deleteHostedImages, getHostedImages, hostImages } from "../services/image-hosting.js";
+import { createUploadedImageJob, getImageJob, subscribeToImageJob, type ImageJobEvent } from "../services/image-jobs.js";
 import { flipHorizontally } from "../services/image-processing.js";
 import { loadPresetImagePair } from "../services/preset-images.js";
 import { buildImagePublicIds } from "../utils/public-ids.js";
@@ -16,6 +17,10 @@ const IMAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-
 
 type ImageParams = {
   id: string;
+};
+
+type ImageJobParams = {
+  jobId: string;
 };
 
 type PresetBody = {
@@ -32,12 +37,84 @@ function readDeleteTokenHeader(value: string | string[] | undefined): string | u
   return Array.isArray(value) ? value[0] : value;
 }
 
+function sendSseEvent(event: ImageJobEvent): string {
+  return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+}
+
 export async function registerImageRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
   app.get("/api/health", async () => ({
     configured: isServiceConfigured(config),
     maxUploadMb: Math.round(config.maxUploadBytes / (1024 * 1024)),
     ok: true
   }));
+
+  app.post("/api/images/jobs", async (request, reply) => {
+    const file = await request.file();
+
+    if (!file) {
+      throw new HttpError(400, "missing_file", "Please upload one image file.");
+    }
+
+    const buffer = await file.toBuffer();
+    const upload = validateImageUpload(buffer, file.filename, config.maxUploadBytes);
+    requireCompleteConfiguration(config);
+    const job = createUploadedImageJob(upload, config);
+
+    return reply.status(202).send({
+      job
+    });
+  });
+
+  app.get<{ Params: ImageJobParams }>("/api/images/jobs/:jobId/events", async (request, reply) => {
+    requireCompleteConfiguration(config);
+
+    const { jobId } = request.params;
+
+    if (!IMAGE_ID_PATTERN.test(jobId)) {
+      throw new HttpError(400, "invalid_job_id", "The image job id is invalid.");
+    }
+
+    if (!getImageJob(jobId)) {
+      throw new HttpError(404, "job_not_found", "The image job is no longer available.");
+    }
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "X-Accel-Buffering": "no"
+    });
+    reply.raw.write("retry: 1000\n\n");
+
+    const closeStream = () => {
+      if (!reply.raw.destroyed) {
+        reply.raw.end();
+      }
+    };
+    const unsubscribe = subscribeToImageJob(jobId, (event) => {
+      if (reply.raw.destroyed) {
+        return;
+      }
+
+      reply.raw.write(sendSseEvent(event));
+
+      if (event.type === "ready" || event.type === "failed") {
+        setTimeout(closeStream, 100);
+      }
+    });
+
+    const keepAlive = setInterval(() => {
+      if (!reply.raw.destroyed) {
+        reply.raw.write(": keep-alive\n\n");
+      }
+    }, 15000);
+
+    request.raw.on("close", () => {
+      clearInterval(keepAlive);
+      unsubscribe?.();
+    });
+  });
 
   app.post("/api/images", async (request, reply) => {
     const file = await request.file();

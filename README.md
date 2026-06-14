@@ -17,6 +17,7 @@ Live app: [https://lasurvivor.github.io/AuraCut/](https://lasurvivor.github.io/A
 - Generate a unique shareable image URL.
 - Download the final image.
 - Delete hosted images when they are no longer needed.
+- Hosted image assets expire after 7 days.
 - Try built-in sample images without spending background-removal credits.
 
 ## User Experience
@@ -60,12 +61,16 @@ public/
 ```txt
 GET    /api/health
 POST   /api/images
+POST   /api/images/jobs
+GET    /api/images/jobs/:jobId/events
 POST   /api/images/presets
 GET    /api/images/:id
 DELETE /api/images/:id
 ```
 
 `POST /api/images` accepts one multipart image file, validates the upload, removes the background, flips the result, hosts the original and processed images, and returns metadata for the frontend.
+
+`POST /api/images/jobs` starts the same transform flow as a background job. `GET /api/images/jobs/:jobId/events` streams processing stages with Server-Sent Events so the frontend can show progress without polling.
 
 `POST /api/images/presets` hosts one of the built-in sample image pairs through the same image lifecycle without calling the background-removal provider.
 
@@ -90,6 +95,7 @@ API errors use a consistent response shape:
 - External image-processing and hosting calls include retry handling where appropriate.
 - Backend routes return typed, user-friendly errors.
 - Delete authorization is scoped to the generated image record.
+- Hosted Cloudinary image assets use a 7-day anonymous access window.
 - Sample images follow the same hosted URL lifecycle as user uploads.
 
 ## Environment Variables

@@ -20,12 +20,19 @@ export type HostedImagePair = {
 };
 
 type CloudinaryResource = {
+  access_control?: Array<{
+    access_type?: string;
+    end?: string;
+  }>;
   bytes?: number;
+  created_at?: string;
   format?: string;
   public_id?: string;
   secure_url?: string;
 };
 
+const HOSTED_IMAGE_TTL_DAYS = 7;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
 const DELETED_MARKER_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lmQ8pQAAAABJRU5ErkJggg==",
   "base64"
@@ -44,7 +51,27 @@ function configureCloudinary(config: AppConfig): void {
   });
 }
 
-async function uploadBuffer(buffer: Buffer, publicId: string, config: AppConfig): Promise<HostedImage> {
+function getHostedImageExpirationDate(): Date {
+  return new Date(Date.now() + HOSTED_IMAGE_TTL_DAYS * MILLISECONDS_PER_DAY);
+}
+
+function getAnonymousAccessControl(expiresAt: Date): Array<{ access_type: "anonymous"; end: string }> {
+  return [
+    {
+      access_type: "anonymous",
+      end: expiresAt.toISOString()
+    }
+  ];
+}
+
+function isResourceExpired(resource: CloudinaryResource): boolean {
+  const anonymousAccess = resource.access_control?.find((access) => access.access_type === "anonymous");
+  const endsAt = anonymousAccess?.end;
+
+  return Boolean(endsAt && Date.parse(endsAt) <= Date.now());
+}
+
+async function uploadBuffer(buffer: Buffer, publicId: string, expiresAt: Date, config: AppConfig): Promise<HostedImage> {
   configureCloudinary(config);
 
   try {
@@ -53,6 +80,7 @@ async function uploadBuffer(buffer: Buffer, publicId: string, config: AppConfig)
         new Promise<HostedImage>((resolve, reject) => {
           const uploadStream = cloudinary.uploader.upload_stream(
             {
+              access_control: getAnonymousAccessControl(expiresAt),
               invalidate: true,
               overwrite: true,
               public_id: publicId,
@@ -95,6 +123,10 @@ async function readHostedImage(publicId: string, config: AppConfig): Promise<Hos
 
     if (!result.secure_url) {
       throw new HttpError(404, "image_not_found", "The requested image is not available.");
+    }
+
+    if (isResourceExpired(result)) {
+      throw new HttpError(404, "image_not_found", "The requested image is no longer available.");
     }
 
     return {
@@ -207,9 +239,10 @@ export async function hostImages(
   publicIds: ImagePublicIds,
   config: AppConfig
 ): Promise<HostedImagePair> {
+  const expiresAt = getHostedImageExpirationDate();
   const uploadResults = await Promise.allSettled([
-    uploadBuffer(originalBuffer, publicIds.original, config),
-    uploadBuffer(processedBuffer, publicIds.processed, config)
+    uploadBuffer(originalBuffer, publicIds.original, expiresAt, config),
+    uploadBuffer(processedBuffer, publicIds.processed, expiresAt, config)
   ]);
   const [originalResult, processedResult] = uploadResults;
 
