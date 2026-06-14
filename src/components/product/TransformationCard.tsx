@@ -105,6 +105,7 @@ export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLLabelElement>(null);
   const hostedBlobUrlsRef = useRef<Set<string>>(new Set());
+  const workflowIdRef = useRef(0);
   const [state, setState] = useState<CardState>("idle");
   const [isDragging, setIsDragging] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -194,6 +195,7 @@ export function TransformationCard() {
   }, [showCompleteTick]);
 
   function clearWorkspace(): void {
+    workflowIdRef.current += 1;
     revokeIfDisposable(previewUrl);
 
     setState("idle");
@@ -272,6 +274,15 @@ export function TransformationCard() {
     centerCanvasInViewport();
   }
 
+  function createWorkflow(): number {
+    workflowIdRef.current += 1;
+    return workflowIdRef.current;
+  }
+
+  function isCurrentWorkflow(workflowId: number): boolean {
+    return workflowIdRef.current === workflowId;
+  }
+
   function revealResult(processedUrl: string, nextPreviewUrl: string): void {
     if (processedUrl.startsWith("blob:")) {
       hostedBlobUrlsRef.current.add(processedUrl);
@@ -290,10 +301,15 @@ export function TransformationCard() {
     setState("result");
   }
 
-  async function processUploadedImage(file: File, nextPreviewUrl: string): Promise<void> {
+  async function processUploadedImage(file: File, nextPreviewUrl: string, workflowId: number): Promise<void> {
     try {
       prepareProcessingState();
       const [image] = await Promise.all([transformUploadedImage(file), wait(1400)]);
+
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
       const nextShareUrl = createShareUrl(image.id);
 
       await saveHostedImageRecord({
@@ -305,11 +321,19 @@ export function TransformationCard() {
         url: image.processedUrl
       });
 
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
       setShareId(image.id);
       setShareUrl(nextShareUrl);
       setDeleteToken(image.deleteToken ?? null);
       revealResult(image.processedUrl, nextPreviewUrl);
     } catch (error) {
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
       setError(getErrorMessage(error));
       setProcessingProgress(0);
       setShowCompleteTick(false);
@@ -318,26 +342,59 @@ export function TransformationCard() {
     }
   }
 
-  async function simulatePresetProcessing(nextPreviewUrl: string, preset: PresetImage): Promise<void> {
+  async function hostPresetResult(preset: PresetImage, workflowId: number): Promise<void> {
+    const image = await transformPresetImage(preset.key);
+    const nextShareUrl = createShareUrl(image.id);
+
+    if (!isCurrentWorkflow(workflowId)) {
+      return;
+    }
+
+    await saveHostedImageRecord({
+      deleteToken: image.deleteToken,
+      filename: `auracut-${image.id}`,
+      id: image.id,
+      mimeType: "image/png",
+      originalUrl: image.originalUrl,
+      url: image.processedUrl
+    });
+
+    if (!isCurrentWorkflow(workflowId)) {
+      return;
+    }
+
+    setShareId(image.id);
+    setShareUrl(nextShareUrl);
+    setDeleteToken(image.deleteToken ?? null);
+    setResultUrl(image.processedUrl);
+  }
+
+  async function simulatePresetProcessing(nextPreviewUrl: string, preset: PresetImage, workflowId: number): Promise<void> {
     try {
       prepareProcessingState();
-      const [image] = await Promise.all([transformPresetImage(preset.key), wait(3350)]);
-      const nextShareUrl = createShareUrl(image.id);
+      const hostingPromise = hostPresetResult(preset, workflowId).catch(() => {
+        if (!isCurrentWorkflow(workflowId)) {
+          return;
+        }
 
-      await saveHostedImageRecord({
-        deleteToken: image.deleteToken,
-        filename: `auracut-${image.id}`,
-        id: image.id,
-        mimeType: "image/png",
-        originalUrl: image.originalUrl,
-        url: image.processedUrl
+        setShareId(null);
+        setShareUrl(null);
+        setDeleteToken(null);
       });
 
-      setShareId(image.id);
-      setShareUrl(nextShareUrl);
-      setDeleteToken(image.deleteToken ?? null);
-      revealResult(image.processedUrl, nextPreviewUrl);
+      await wait(1650);
+
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
+      revealResult(preset.processedUrl as string, nextPreviewUrl);
+      void hostingPromise;
     } catch (error) {
+      if (!isCurrentWorkflow(workflowId)) {
+        return;
+      }
+
       setError(getErrorMessage(error));
       setProcessingProgress(0);
       setShowCompleteTick(false);
@@ -347,6 +404,7 @@ export function TransformationCard() {
   }
 
   async function handleFile(file: File) {
+    const workflowId = createWorkflow();
     const validationMessage = validateFile(file);
     if (validationMessage) {
       setError(validationMessage);
@@ -367,7 +425,7 @@ export function TransformationCard() {
     setProcessingProgress(0);
     setShowCompleteTick(false);
     setShowResultActions(false);
-    await processUploadedImage(file, nextPreviewUrl);
+    await processUploadedImage(file, nextPreviewUrl, workflowId);
   }
 
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
@@ -422,6 +480,7 @@ export function TransformationCard() {
   async function startPreset(preset: PresetImage): Promise<void> {
     revokeIfDisposable(previewUrl);
 
+    const workflowId = createWorkflow();
     setPreviewUrl(preset.url);
     setResultUrl(null);
     setDeleteToken(null);
@@ -438,7 +497,7 @@ export function TransformationCard() {
       return;
     }
 
-    await simulatePresetProcessing(preset.url, preset);
+    await simulatePresetProcessing(preset.url, preset, workflowId);
   }
 
   return (
@@ -647,16 +706,18 @@ export function TransformationCard() {
               <Eye className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Compare</span>
             </button>
-            <button
-              type="button"
-              onClick={() => void copyUrl()}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
-              title="Copy URL"
-              aria-label="Copy URL"
-            >
-              <Link2 className="h-4 w-4" aria-hidden="true" />
-              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
-            </button>
+            {shareUrl ? (
+              <button
+                type="button"
+                onClick={() => void copyUrl()}
+                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+                title="Copy URL"
+                aria-label="Copy URL"
+              >
+                <Link2 className="h-4 w-4" aria-hidden="true" />
+                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
+              </button>
+            ) : null}
             <a
               href={resultUrl}
               download
@@ -678,16 +739,18 @@ export function TransformationCard() {
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
             </button>
-            <button
-              type="button"
-              onClick={() => void deleteImage()}
-              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
-              title="Delete"
-              aria-label="Delete image"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
-            </button>
+            {shareId && deleteToken ? (
+              <button
+                type="button"
+                onClick={() => void deleteImage()}
+                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+                title="Delete"
+                aria-label="Delete image"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
+              </button>
+            ) : null}
           </motion.div>
         ) : null}
 

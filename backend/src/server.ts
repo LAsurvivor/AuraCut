@@ -19,6 +19,8 @@ export async function createServer(config: AppConfig): Promise<FastifyInstance> 
   });
 
   await app.register(cors, {
+    allowedHeaders: ["content-type", "x-delete-token"],
+    methods: ["GET", "HEAD", "POST", "DELETE", "OPTIONS"],
     origin: config.nodeEnv === "production" ? config.allowedOrigins : true
   });
   await app.register(multipart, {
