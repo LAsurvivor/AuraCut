@@ -41,6 +41,26 @@ function sendSseEvent(event: ImageJobEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
+function getSseCorsHeaders(origin: string | undefined, config: AppConfig): Record<string, string> {
+  const headers: Record<string, string> = {
+    Vary: "Origin"
+  };
+
+  if (!origin) {
+    return headers;
+  }
+
+  const isAllowedOrigin = config.nodeEnv === "production" ? config.allowedOrigins.includes(origin) : true;
+
+  if (isAllowedOrigin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Headers"] = "content-type, x-delete-token";
+    headers["Access-Control-Allow-Methods"] = "GET, HEAD, POST, DELETE, OPTIONS";
+  }
+
+  return headers;
+}
+
 export async function registerImageRoutes(app: FastifyInstance, config: AppConfig): Promise<void> {
   app.get("/api/health", async () => ({
     configured: isServiceConfigured(config),
@@ -80,6 +100,7 @@ export async function registerImageRoutes(app: FastifyInstance, config: AppConfi
 
     reply.hijack();
     reply.raw.writeHead(200, {
+      ...getSseCorsHeaders(request.headers.origin, config),
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
       "Content-Type": "text/event-stream; charset=utf-8",
