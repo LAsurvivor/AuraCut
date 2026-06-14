@@ -57,23 +57,28 @@ export type ImageJobEvent =
 
 type ImageJob = ImageJobSnapshot & {
   subscribers: Set<(event: ImageJobEvent) => void>;
+  timeout: ReturnType<typeof setTimeout>;
 };
 
 const JOB_TTL_MS = 30 * 60 * 1000;
+const JOB_TIMEOUT_MS = 120 * 1000;
 const jobs = new Map<string, ImageJob>();
 
 export function createUploadedImageJob(upload: ValidatedImageUpload, config: AppConfig): ImageJobSnapshot {
   cleanupExpiredJobs();
 
   const now = new Date().toISOString();
-  const job: ImageJob = {
+  const job = {
     createdAt: now,
     id: randomUUID(),
     progress: 22,
     stage: "queued",
     subscribers: new Set(),
+    timeout: setTimeout(() => {
+      failJob(job, new HttpError(504, "image_job_timeout", "Image processing timed out. Try again."));
+    }, JOB_TIMEOUT_MS),
     updatedAt: now
-  };
+  } satisfies ImageJob;
 
   jobs.set(job.id, job);
   void processUploadedImageJob(job, upload, config);
@@ -107,12 +112,24 @@ async function processUploadedImageJob(job: ImageJob, upload: ValidatedImageUplo
     updateJob(job, "removing", 34);
     const backgroundRemoved = await removeBackground(upload, config);
 
+    if (isTerminalJob(job)) {
+      return;
+    }
+
     updateJob(job, "flipping", 72);
     const flipped = await flipHorizontally(backgroundRemoved.buffer);
+
+    if (isTerminalJob(job)) {
+      return;
+    }
 
     updateJob(job, "hosting", 84);
     const publicIds = buildImagePublicIds(job.id);
     const hostedImages = await hostImages(upload.buffer, flipped.buffer, publicIds, config);
+
+    if (isTerminalJob(job)) {
+      return;
+    }
 
     const image: ImageJobImage = {
       createdAt: job.createdAt,
@@ -138,6 +155,11 @@ async function processUploadedImageJob(job: ImageJob, upload: ValidatedImageUplo
 }
 
 function completeJob(job: ImageJob, image: ImageJobImage): void {
+  if (isTerminalJob(job)) {
+    return;
+  }
+
+  clearTimeout(job.timeout);
   job.image = image;
   job.progress = 100;
   job.stage = "ready";
@@ -146,6 +168,11 @@ function completeJob(job: ImageJob, image: ImageJobImage): void {
 }
 
 function failJob(job: ImageJob, error: unknown): void {
+  if (isTerminalJob(job)) {
+    return;
+  }
+
+  clearTimeout(job.timeout);
   const fallback = new HttpError(500, "internal_error", "Something went wrong while processing the image.");
   const httpError = isHttpError(error) ? error : fallback;
 
@@ -160,10 +187,18 @@ function failJob(job: ImageJob, error: unknown): void {
 }
 
 function updateJob(job: ImageJob, stage: Exclude<ImageJobStage, "ready" | "failed">, progress: number): void {
+  if (isTerminalJob(job)) {
+    return;
+  }
+
   job.stage = stage;
   job.progress = progress;
   job.updatedAt = new Date().toISOString();
   broadcast(job, "progress");
+}
+
+function isTerminalJob(job: ImageJobSnapshot): boolean {
+  return job.stage === "ready" || job.stage === "failed";
 }
 
 function broadcast(job: ImageJob, type: ImageJobEvent["type"]): void {

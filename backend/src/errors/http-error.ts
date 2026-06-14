@@ -7,6 +7,7 @@ export type ErrorCode =
   | "file_too_large"
   | "image_delete_failed"
   | "image_hosting_failed"
+  | "image_job_timeout"
   | "image_lookup_failed"
   | "image_not_found"
   | "internal_error"
