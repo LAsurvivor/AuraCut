@@ -1,32 +1,61 @@
 # AuraCut
 
-AuraCut is a full-stack AI image transformation service. Users upload one image, the backend removes the background through Clipdrop, flips the result horizontally with Sharp, hosts the original and processed images on Cloudinary, and returns a shareable URL plus a signed delete token.
+![AuraCut brand banner](public/images/readme-banner.svg)
 
-## Project Structure
+AuraCut is a polished AI image transformation app for removing backgrounds, flipping images horizontally, and sharing the final result with a hosted URL.
+
+The product is designed as a compact, cinematic one-frame workflow: upload an image, watch it process, preview the transparent result, then copy a shareable link or download the transformed image.
+
+Live app: [https://lasurvivor.github.io/AuraCut/](https://lasurvivor.github.io/AuraCut/)
+
+## Product Highlights
+
+- Upload a single PNG, JPG, JPEG, or WEBP image.
+- Remove the image background with AI.
+- Flip the processed image horizontally.
+- Host the transformed image online.
+- Generate a unique shareable image URL.
+- Download the final image.
+- Delete hosted images when they are no longer needed.
+- Try built-in sample images without spending background-removal credits.
+
+## User Experience
+
+AuraCut keeps the full workflow in one focused transformation card.
+
+Before upload, the interface presents a minimal drag-and-drop area with curated sample images. During processing, the card becomes a smooth rendering state with a dot-field animation and lightweight progress feedback. When the result is ready, the same card reveals the transformed image with compact actions for compare, copy URL, download, re-upload, and delete.
+
+The UI is responsive across desktop and mobile, preserves image aspect ratios, and avoids distortion by fitting previews inside a stable canvas.
+
+## Tech Stack
+
+- Frontend: Next.js, React, TypeScript, Tailwind CSS, Framer Motion, Lucide React.
+- Backend: Fastify, TypeScript, Sharp, Cloudinary, Clipdrop Remove Background API.
+- Storage and hosting: Cloudinary.
+- Deployment: GitHub Pages for the static frontend and Render for the TypeScript backend.
+
+## Architecture
 
 ```txt
 src/
   app/                 Next.js App Router pages
-  components/          Frontend UI components
-  lib/                 Frontend browser helpers
+  components/          Product UI components
+  lib/                 Frontend browser and API helpers
+
 backend/
   src/
     config/            Environment parsing
     errors/            Typed HTTP errors
     plugins/           Fastify plugins and error handling
     routes/            API routes
-    services/          Clipdrop, Sharp, Cloudinary, token services
+    services/          Image processing, hosting, presets, delete tokens
     utils/             Upload validation and shared helpers
-public/                Static images and presets
+
+public/
+  images/              Static hero and preset assets
 ```
 
-## Stack
-
-- Frontend: Next.js, React, TypeScript, Tailwind CSS, Framer Motion, Lucide React.
-- Backend: Fastify, TypeScript, Clipdrop Remove Background API, Sharp, Cloudinary.
-- Deployment: GitHub Pages for the static frontend, or a Node service that serves `out/` and `/api/*`.
-
-## API
+## API Overview
 
 ```txt
 GET    /api/health
@@ -36,15 +65,15 @@ GET    /api/images/:id
 DELETE /api/images/:id
 ```
 
-`POST /api/images` accepts one multipart image file. Supported formats are PNG, JPG/JPEG, and WEBP.
+`POST /api/images` accepts one multipart image file, validates the upload, removes the background, flips the result, hosts the original and processed images, and returns metadata for the frontend.
 
-`POST /api/images/presets` hosts one of the built-in sample image pairs on Cloudinary without spending background-removal credits.
+`POST /api/images/presets` hosts one of the built-in sample image pairs through the same image lifecycle without calling the background-removal provider.
 
-`GET /api/images/:id` returns the hosted original and processed image URLs.
+`GET /api/images/:id` returns a hosted image record.
 
-`DELETE /api/images/:id` requires the `x-delete-token` header returned by the upload response.
+`DELETE /api/images/:id` invalidates the hosted result when a valid delete token is provided.
 
-All API errors return a consistent shape:
+API errors use a consistent response shape:
 
 ```json
 {
@@ -55,15 +84,23 @@ All API errors return a consistent shape:
 }
 ```
 
-## Environment
+## Error Handling And Reliability
 
-Copy `.env.example` to `.env` and fill in the secrets:
+- Upload validation checks file signatures instead of trusting extensions.
+- External image-processing and hosting calls include retry handling where appropriate.
+- Backend routes return typed, user-friendly errors.
+- Delete authorization is scoped to the generated image record.
+- Sample images follow the same hosted URL lifecycle as user uploads.
+
+## Environment Variables
+
+Create a local `.env` file from the example template:
 
 ```bash
 cp .env.example .env
 ```
 
-Required:
+Required variables:
 
 ```txt
 CLIPDROP_API_KEY
@@ -73,31 +110,16 @@ CLOUDINARY_API_SECRET
 DELETE_TOKEN_SECRET
 ```
 
-Optional:
+Optional variables:
 
 ```txt
 MAX_UPLOAD_MB=10
 PORT=8090
-ALLOWED_ORIGINS=https://lasurvivor.github.io
-NEXT_PUBLIC_API_BASE_URL=https://auracut-ai-background-remover.onrender.com
+ALLOWED_ORIGINS=http://localhost:8090
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8091
 ```
 
-## Local Development
-
-Frontend:
-
-```bash
-npm install
-npm run dev
-```
-
-Backend API:
-
-```bash
-npm run dev:backend
-```
-
-Open `http://localhost:8090`. In development, the frontend runs on port `8090` and API requests are sent to the backend on port `8091`.
+Never commit real credentials or private access codes to the repository.
 
 ## Build
 
@@ -106,21 +128,28 @@ npm run typecheck
 npm run build
 ```
 
-`npm run build` generates:
+`npm run build` generates the static frontend in `out/` and the compiled backend in `dist/backend/`.
 
-- `out/` for the static frontend
-- `dist/backend/` for the TypeScript backend
+## Local Development
 
-## Production
+Install dependencies:
 
 ```bash
-NODE_ENV=production npm run start
+npm install
 ```
 
-The backend serves `/api/*` and, when `out/` exists, the static frontend.
+Start the frontend:
 
-## Notes
+```bash
+npm run dev
+```
 
-- Upload validation checks file signatures rather than trusting extensions.
-- Delete authorization uses an HMAC token bound to the image id.
-- Built-in preset images are hosted through the same Cloudinary flow as uploaded images, but they skip the background-removal API to avoid spending credits.
+Start the backend API in a second terminal:
+
+```bash
+npm run dev:backend
+```
+
+Open `http://localhost:8090`.
+
+In development, the frontend runs on port `8090`, and API requests are sent to the backend on port `8091`.

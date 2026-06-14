@@ -1,0 +1,71 @@
+<svg width="1600" height="640" viewBox="0 0 1600 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">AuraCut brand banner</title>
+  <desc id="desc">Dark cinematic AuraCut banner with the words Cut clean. Share instantly.</desc>
+  <defs>
+    <radialGradient id="violet" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1160 150) rotate(139) scale(720 520)">
+      <stop stop-color="#8B5CF6" stop-opacity="0.85"/>
+      <stop offset="0.45" stop-color="#22D3EE" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="cyan" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 530) rotate(-18) scale(680 360)">
+      <stop stop-color="#67E8F9" stop-opacity="0.42"/>
+      <stop offset="0.55" stop-color="#6366F1" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#020617" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x1="264" y1="0" x2="1206" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9D5FF"/>
+      <stop offset="0.45" stop-color="#67E8F9"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <linearGradient id="card" x1="972" y1="118" x2="1428" y2="504" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="34"/>
+    </filter>
+    <clipPath id="mock">
+      <rect x="1018" y="128" width="430" height="384" rx="42"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1600" height="640" rx="48" fill="#020617"/>
+  <rect width="1600" height="640" rx="48" fill="url(#violet)"/>
+  <rect width="1600" height="640" rx="48" fill="url(#cyan)"/>
+  <path opacity="0.14" d="M0 466C210 410 354 512 536 456C725 397 810 230 1016 240C1249 251 1365 438 1600 368" stroke="url(#line)" stroke-width="2"/>
+  <path opacity="0.09" d="M0 216C212 146 342 206 514 170C738 122 861 44 1072 92C1270 137 1399 269 1600 218" stroke="url(#line)" stroke-width="2"/>
+
+  <g transform="translate(144 118)">
+    <rect x="0" y="0" width="132" height="42" rx="21" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.14"/>
+    <text x="66" y="27" text-anchor="middle" fill="#DDFBFF" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="16" font-weight="650" letter-spacing="0.08em">AURACUT</text>
+    <text x="0" y="168" fill="#F8FAFC" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="600" letter-spacing="-0.035em">Cut clean.</text>
+    <text x="0" y="270" fill="#F8FAFC" font-family="Georgia, 'Times New Roman', serif" font-size="96" font-weight="600" letter-spacing="-0.035em">Share instantly.</text>
+    <text x="4" y="334" fill="#CBD5E1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="27" font-weight="450">Remove backgrounds. Flip results.</text>
+    <text x="4" y="374" fill="#CBD5E1" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="27" font-weight="450">Share hosted images instantly.</text>
+  </g>
+
+  <g filter="url(#soft-glow)" opacity="0.8">
+    <circle cx="1224" cy="284" r="156" fill="#38BDF8" fill-opacity="0.22"/>
+    <circle cx="1338" cy="218" r="142" fill="#A78BFA" fill-opacity="0.26"/>
+  </g>
+
+  <rect x="996" y="106" width="474" height="428" rx="56" fill="url(#card)" stroke="#FFFFFF" stroke-opacity="0.16"/>
+  <g clip-path="url(#mock)">
+    <rect x="1018" y="128" width="430" height="384" fill="#08111F"/>
+    <rect x="1018" y="128" width="430" height="384" fill="url(#violet)" opacity="0.5"/>
+    <path d="M1018 384C1106 352 1144 292 1226 318C1316 347 1368 426 1448 390V512H1018V384Z" fill="#020617" fill-opacity="0.58"/>
+    <circle cx="1250" cy="282" r="116" fill="#0F172A" stroke="url(#line)" stroke-width="2" stroke-opacity="0.9"/>
+    <path d="M1202 258C1202 214 1232 184 1272 184C1318 184 1346 218 1346 260C1346 315 1302 354 1270 396C1254 374 1202 324 1202 258Z" fill="#E9D5FF" fill-opacity="0.9"/>
+    <path d="M1270 184C1318 184 1346 218 1346 260C1346 315 1302 354 1270 396V184Z" fill="#22D3EE" fill-opacity="0.62"/>
+    <rect x="1122" y="450" width="222" height="16" rx="8" fill="#FFFFFF" fill-opacity="0.2"/>
+    <rect x="1174" y="474" width="118" height="10" rx="5" fill="#FFFFFF" fill-opacity="0.12"/>
+  </g>
+  <rect x="1018" y="128" width="430" height="384" rx="42" stroke="#FFFFFF" stroke-opacity="0.18"/>
+
+  <g opacity="0.8">
+    <circle cx="1432" cy="104" r="2.5" fill="#E0F2FE"/>
+    <circle cx="1372" cy="570" r="2" fill="#E9D5FF"/>
+    <circle cx="842" cy="78" r="2" fill="#67E8F9"/>
+    <circle cx="776" cy="522" r="2.5" fill="#C4B5FD"/>
+  </g>
+</svg>
