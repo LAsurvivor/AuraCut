@@ -5,13 +5,14 @@ import { AlertTriangle, Check, Download, Eye, Link2, RefreshCw, Trash2, Upload }
 import { DragEvent, useEffect, useRef, useState } from "react";
 
 import { markStoredImageDeleted, saveHostedImageRecord } from "@/lib/client-image-store";
+import { downloadImageFile } from "@/lib/download-image";
 import { deleteHostedImage, transformPresetImage, transformUploadedImage } from "@/lib/image-api";
 import { createShareUrl, withBasePath } from "@/lib/paths";
 
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
-type ToastKind = "copied" | "deleteFailed" | "downloaded" | "deleted" | null;
+type ToastKind = "copied" | "deleteFailed" | "downloadFailed" | "downloaded" | "deleted" | null;
 type PresetImage = {
   key: string;
   name: string;
@@ -105,6 +106,7 @@ export function TransformationCard() {
   const inputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLLabelElement>(null);
   const hostedBlobUrlsRef = useRef<Set<string>>(new Set());
+  const toastTimerRef = useRef<number | null>(null);
   const workflowIdRef = useRef(0);
   const [state, setState] = useState<CardState>("idle");
   const [isDragging, setIsDragging] = useState(false);
@@ -147,6 +149,10 @@ export function TransformationCard() {
     const hostedBlobUrls = hostedBlobUrlsRef.current;
 
     return () => {
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+
       hostedBlobUrls.forEach((url) => revokeBlobUrl(url));
       hostedBlobUrls.clear();
     };
@@ -216,8 +222,15 @@ export function TransformationCard() {
   }
 
   function showToast(kind: ToastKind): void {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
     setToast(kind);
-    window.setTimeout(() => setToast(null), 1500);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 1800);
   }
 
   function centerCanvasInViewport(): void {
@@ -444,6 +457,19 @@ export function TransformationCard() {
 
     await copyTextToClipboard(shareUrl);
     showToast("copied");
+  }
+
+  async function downloadResult(): Promise<void> {
+    if (!resultUrl) {
+      return;
+    }
+
+    try {
+      await downloadImageFile(resultUrl, shareId ? `auracut-${shareId}` : "auracut");
+      showToast("downloaded");
+    } catch {
+      showToast("downloadFailed");
+    }
   }
 
   async function deleteImage(): Promise<void> {
@@ -718,17 +744,16 @@ export function TransformationCard() {
                 <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
               </button>
             ) : null}
-            <a
-              href={resultUrl}
-              download
-              onClick={() => showToast("downloaded")}
+            <button
+              type="button"
+              onClick={() => void downloadResult()}
               className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
               title="Download"
               aria-label="Download"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Save</span>
-            </a>
+            </button>
             <button
               type="button"
               onClick={startAgain}
@@ -784,7 +809,9 @@ export function TransformationCard() {
               ? "Image deleted"
               : toast === "deleteFailed"
                 ? "Delete failed"
-                : "Download started"}
+                : toast === "downloadFailed"
+                  ? "Download failed"
+                  : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>

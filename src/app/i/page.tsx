@@ -1,14 +1,16 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Download, Image as ImageIcon, RefreshCw, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Download, Image as ImageIcon, RefreshCw, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { getStoredImage, markStoredImageDeleted } from "@/lib/client-image-store";
+import { downloadImageFile } from "@/lib/download-image";
 import { deleteHostedImage, fetchHostedImage } from "@/lib/image-api";
 
 type ViewerState = "loading" | "ready" | "missing" | "error";
 type DeleteMode = "local" | "remote" | "unavailable";
+type ToastKind = "deleted" | "deleteFailed" | "downloaded" | "downloadFailed" | null;
 
 function readImageIdFromUrl(): string | null {
   const imageId = new URLSearchParams(window.location.search).get("id");
@@ -17,12 +19,39 @@ function readImageIdFromUrl(): string | null {
 }
 
 export default function SharedImagePage() {
+  const toastTimerRef = useRef<number | null>(null);
   const [downloadName, setDownloadName] = useState("auracut");
   const [deleteMode, setDeleteMode] = useState<DeleteMode>("unavailable");
   const [deleteToken, setDeleteToken] = useState<string | null>(null);
   const [imageId, setImageId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [state, setState] = useState<ViewerState>("loading");
+  const [toast, setToast] = useState<ToastKind>(null);
+
+  function showToast(kind: ToastKind): void {
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    setToast(kind);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 1800);
+  }
+
+  async function downloadImage(): Promise<void> {
+    if (!imageUrl) {
+      return;
+    }
+
+    try {
+      await downloadImageFile(imageUrl, downloadName);
+      showToast("downloaded");
+    } catch {
+      showToast("downloadFailed");
+    }
+  }
 
   async function deleteImage(): Promise<void> {
     if (!imageId) {
@@ -36,7 +65,7 @@ export default function SharedImagePage() {
 
       await markStoredImageDeleted(imageId);
     } catch {
-      setState("error");
+      showToast("deleteFailed");
       return;
     }
 
@@ -48,6 +77,7 @@ export default function SharedImagePage() {
     setDeleteMode("unavailable");
     setDeleteToken(null);
     setState("missing");
+    showToast("deleted");
   }
 
   useEffect(() => {
@@ -116,6 +146,10 @@ export default function SharedImagePage() {
 
     return () => {
       isActive = false;
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -178,14 +212,14 @@ export default function SharedImagePage() {
 
         {state === "ready" && imageUrl ? (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href={imageUrl}
-              download={downloadName}
+            <button
+              type="button"
+              onClick={() => void downloadImage()}
               className="inline-flex h-11 items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-5 text-sm font-semibold text-white/72 shadow-[0_18px_70px_rgba(2,6,23,0.18)] transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
             >
               <Download className="h-4 w-4" aria-hidden="true" />
               Download
-            </a>
+            </button>
             {deleteMode !== "unavailable" ? (
               <button
                 type="button"
@@ -209,6 +243,19 @@ export default function SharedImagePage() {
           </Link>
         ) : null}
       </section>
+
+      {toast ? (
+        <div className="fixed bottom-6 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-2 rounded-full border border-cyan-100/20 bg-slate-950/92 px-4 py-3 text-sm font-semibold text-white shadow-[0_18px_60px_rgba(2,6,23,0.42),0_0_38px_rgba(34,211,238,0.2)] backdrop-blur-xl">
+          <Check className="h-4 w-4 text-cyan-100" aria-hidden="true" />
+          {toast === "deleted"
+            ? "Image deleted"
+            : toast === "deleteFailed"
+              ? "Delete failed"
+              : toast === "downloadFailed"
+                ? "Download failed"
+                : "Download started"}
+        </div>
+      ) : null}
     </main>
   );
 }
