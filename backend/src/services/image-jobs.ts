@@ -61,7 +61,7 @@ type ImageJob = ImageJobSnapshot & {
 };
 
 const JOB_TTL_MS = 30 * 60 * 1000;
-const JOB_TIMEOUT_MS = 120 * 1000;
+const JOB_TIMEOUT_MS = 30 * 1000;
 const jobs = new Map<string, ImageJob>();
 
 export function createUploadedImageJob(upload: ValidatedImageUpload, config: AppConfig): ImageJobSnapshot {

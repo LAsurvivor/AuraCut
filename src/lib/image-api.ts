@@ -277,7 +277,7 @@ function subscribeToImageJob(
 
     const timeout = window.setTimeout(() => {
       finish(() => reject(new Error("Image processing timed out. Try again.")));
-    }, 135000);
+    }, 45000);
 
     function finish(callback: () => void): void {
       if (settled) {

@@ -12,7 +12,7 @@ import { createShareUrl, withBasePath } from "@/lib/paths";
 import { ProcessingAnimation } from "./ProcessingAnimation";
 
 type CardState = "idle" | "processing" | "result" | "error";
-type ToastKind = "copied" | "deleteFailed" | "downloadFailed" | "downloaded" | "deleted" | null;
+type ToastKind = "copied" | "deleteFailed" | "downloadFailed" | "downloaded" | "deleted" | "preparingUrl" | null;
 type PresetImage = {
   key: string;
   name: string;
@@ -122,6 +122,7 @@ export function TransformationCard() {
   const [processingTargetProgress, setProcessingTargetProgress] = useState(0);
   const [showCompleteTick, setShowCompleteTick] = useState(false);
   const [showResultActions, setShowResultActions] = useState(false);
+  const canUpload = state === "idle";
   const isCanvasExpanded = state !== "idle" && Boolean(previewUrl);
   const processingTargetRef = useRef(0);
 
@@ -170,13 +171,24 @@ export function TransformationCard() {
     }
 
     let animationFrame = 0;
+    let lastSlowAdvanceAt = performance.now();
 
     const tick = () => {
+      const now = performance.now();
       setProcessingProgress((current) => {
         const target = processingTargetRef.current;
 
+        if (current < target) {
+          lastSlowAdvanceAt = now;
+        }
+
         if (current >= target) {
-          return current;
+          if (current >= 99 || now - lastSlowAdvanceAt < 2000) {
+            return current;
+          }
+
+          lastSlowAdvanceAt = now;
+          return Math.min(99, current + 1);
         }
 
         const distance = target - current;
@@ -384,6 +396,9 @@ export function TransformationCard() {
     const nextShareUrl = createShareUrl(image.id);
 
     if (!isCurrentWorkflow(workflowId)) {
+      if (image.deleteToken) {
+        void deleteHostedImage({ deleteToken: image.deleteToken, id: image.id }).catch(() => undefined);
+      }
       return null;
     }
 
@@ -411,34 +426,39 @@ export function TransformationCard() {
     try {
       prepareProcessingState();
       advanceProcessingTarget(28);
-      const hostingPromise = hostPresetResult(preset, workflowId);
+      const hostingPromise = hostPresetResult(preset, workflowId)
+        .then((hostedResult) => {
+          if (!hostedResult || !isCurrentWorkflow(workflowId)) {
+            return;
+          }
 
-      await wait(420);
+          setShareId(hostedResult.image.id);
+          setShareUrl(hostedResult.shareUrl);
+          setDeleteToken(hostedResult.deleteToken);
+          setResultUrl(hostedResult.image.processedUrl);
+        })
+        .catch(() => undefined);
+
+      await wait(280);
       if (!isCurrentWorkflow(workflowId)) {
         return;
       }
 
       advanceProcessingTarget(62);
-      await wait(520);
+      await wait(320);
       if (!isCurrentWorkflow(workflowId)) {
         return;
       }
 
       advanceProcessingTarget(86);
-      const [hostedResult] = await Promise.all([hostingPromise, wait(710)]);
+      await wait(420);
 
       if (!isCurrentWorkflow(workflowId)) {
         return;
       }
 
-      if (!hostedResult) {
-        return;
-      }
-
-      setShareId(hostedResult.image.id);
-      setShareUrl(hostedResult.shareUrl);
-      setDeleteToken(hostedResult.deleteToken);
-      revealResult(hostedResult.image.processedUrl, nextPreviewUrl);
+      revealResult(preset.processedUrl as string, nextPreviewUrl);
+      void hostingPromise;
     } catch (error) {
       if (!isCurrentWorkflow(workflowId)) {
         return;
@@ -455,6 +475,10 @@ export function TransformationCard() {
   }
 
   async function handleFile(file: File) {
+    if (!canUpload) {
+      return;
+    }
+
     const workflowId = createWorkflow();
     const validationMessage = validateFile(file);
     if (validationMessage) {
@@ -484,6 +508,10 @@ export function TransformationCard() {
   function handleDrop(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
     setIsDragging(false);
+    if (!canUpload) {
+      return;
+    }
+
     const file = event.dataTransfer.files?.[0];
     if (file) {
       void handleFile(file);
@@ -492,6 +520,7 @@ export function TransformationCard() {
 
   async function copyUrl() {
     if (!shareUrl) {
+      showToast("preparingUrl");
       return;
     }
 
@@ -541,6 +570,10 @@ export function TransformationCard() {
   }
 
   async function startPreset(preset: PresetImage): Promise<void> {
+    if (!canUpload) {
+      return;
+    }
+
     revokeIfDisposable(previewUrl);
 
     const workflowId = createWorkflow();
@@ -577,7 +610,7 @@ export function TransformationCard() {
       <div className="tool-stage">
         <label
           ref={canvasRef}
-          className={`cinema-panel tool-canvas relative flex origin-bottom cursor-pointer items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${isDragging
+          className={`cinema-panel tool-canvas relative flex origin-bottom items-center justify-center overflow-hidden rounded-[2rem] border transition-[background-color,border-color,box-shadow,transform] duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] ${canUpload ? "cursor-pointer" : "cursor-default"} ${isDragging
             ? "scale-[1.01] border-cyan-200/60 bg-white/[0.08] shadow-[0_0_0_1px_rgba(103,232,249,0.24),0_30px_120px_rgba(34,211,238,0.22)]"
             : state === "processing"
               ? "tool-canvas-expanded border-cyan-200/42 bg-slate-950 shadow-[0_0_0_1px_rgba(34,211,238,0.18),0_30px_130px_rgba(59,130,246,0.22),inset_0_0_64px_rgba(168,85,247,0.13)]"
@@ -587,20 +620,32 @@ export function TransformationCard() {
             }`}
           onDragEnter={(event) => {
             event.preventDefault();
+            if (!canUpload) {
+              return;
+            }
             setIsDragging(true);
           }}
           onDragOver={(event) => {
             event.preventDefault();
+            if (!canUpload) {
+              return;
+            }
             setIsDragging(true);
           }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
+          onClick={(event) => {
+            if (!canUpload) {
+              event.preventDefault();
+            }
+          }}
         >
           <input
             ref={inputRef}
             type="file"
             accept={ACCEPTED_INPUT}
             className="sr-only"
+            disabled={!canUpload}
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) {
@@ -771,18 +816,16 @@ export function TransformationCard() {
               <Eye className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Compare</span>
             </button>
-            {shareUrl ? (
-              <button
-                type="button"
-                onClick={() => void copyUrl()}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
-                title="Copy URL"
-                aria-label="Copy URL"
-              >
-                <Link2 className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => void copyUrl()}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+              title="Copy URL"
+              aria-label="Copy URL"
+            >
+              <Link2 className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Copy</span>
+            </button>
             <button
               type="button"
               onClick={() => void downloadResult()}
@@ -803,18 +846,16 @@ export function TransformationCard() {
               <RefreshCw className="h-4 w-4" aria-hidden="true" />
               <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Again</span>
             </button>
-            {shareId && deleteToken ? (
-              <button
-                type="button"
-                onClick={() => void deleteImage()}
-                className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
-                title="Delete"
-                aria-label="Delete image"
-              >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => void deleteImage()}
+              className="group relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/72 transition hover:border-cyan-200/30 hover:bg-cyan-100 hover:text-slate-950"
+              title="Delete"
+              aria-label="Delete image"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+              <span className="pointer-events-none absolute -top-9 scale-95 rounded-full border border-white/10 bg-slate-950/90 px-2 py-1 text-[11px] text-white/70 opacity-0 shadow-[0_12px_30px_rgba(2,6,23,0.32)] transition group-hover:scale-100 group-hover:opacity-100">Delete</span>
+            </button>
           </motion.div>
         ) : null}
 
@@ -846,11 +887,13 @@ export function TransformationCard() {
             ? "URL copied"
             : toast === "deleted"
               ? "Image deleted"
-              : toast === "deleteFailed"
-                ? "Delete failed"
-                : toast === "downloadFailed"
-                  ? "Download failed"
-                  : "Download started"}
+              : toast === "preparingUrl"
+                ? "URL preparing"
+                : toast === "deleteFailed"
+                  ? "Delete failed"
+                  : toast === "downloadFailed"
+                    ? "Download failed"
+                    : "Download started"}
         </motion.div>
       ) : null}
     </motion.section>
