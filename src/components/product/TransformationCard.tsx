@@ -483,8 +483,9 @@ export function TransformationCard() {
     }
 
     clearWorkspace();
+    showToast("deleted");
 
-    try {
+    void (async () => {
       if (imageIdToDelete) {
         await markStoredImageDeleted(imageIdToDelete).catch(() => undefined);
       }
@@ -492,11 +493,7 @@ export function TransformationCard() {
       if (imageIdToDelete && deleteTokenToUse) {
         await deleteHostedImage({ deleteToken: deleteTokenToUse, id: imageIdToDelete });
       }
-
-      showToast("deleted");
-    } catch {
-      showToast("deleteFailed");
-    }
+    })().catch(() => undefined);
   }
 
   function startAgain(): void {

@@ -58,19 +58,13 @@ export default function SharedImagePage() {
       return;
     }
 
-    try {
-      if (deleteMode === "remote" && deleteToken) {
-        await deleteHostedImage({ deleteToken, id: imageId });
-      }
+    const imageIdToDelete = imageId;
+    const deleteModeToUse = deleteMode;
+    const deleteTokenToUse = deleteToken;
+    const imageUrlToClear = imageUrl;
 
-      await markStoredImageDeleted(imageId);
-    } catch {
-      showToast("deleteFailed");
-      return;
-    }
-
-    if (imageUrl?.startsWith("blob:")) {
-      URL.revokeObjectURL(imageUrl);
+    if (imageUrlToClear?.startsWith("blob:")) {
+      URL.revokeObjectURL(imageUrlToClear);
     }
 
     setImageUrl(null);
@@ -78,6 +72,14 @@ export default function SharedImagePage() {
     setDeleteToken(null);
     setState("missing");
     showToast("deleted");
+
+    void (async () => {
+      await markStoredImageDeleted(imageIdToDelete).catch(() => undefined);
+
+      if (deleteModeToUse === "remote" && deleteTokenToUse) {
+        await deleteHostedImage({ deleteToken: deleteTokenToUse, id: imageIdToDelete });
+      }
+    })().catch(() => undefined);
   }
 
   useEffect(() => {
